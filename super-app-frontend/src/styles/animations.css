@@ -1,0 +1,95 @@
+/* Lightweight CSS Animations — optimized for 60fps */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+  /* Removed filter:blur() — it triggers a repaint on every frame */
+}
+
+@keyframes slideUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes scaleUp {
+  from { transform: scale(0.97); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Replaced box-shadow animation with opacity — opacity is GPU-composited */
+@keyframes pulseGlowCyan {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+@keyframes pulseGlowRed {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+@keyframes floatAnimation {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }  /* reduced from -6px */
+}
+
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Helper Animation Classes */
+.animate-fade-in {
+  animation: fadeIn var(--transition-normal) forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s ease forwards;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.3s ease forwards;
+}
+
+.animate-scale-up {
+  animation: scaleUp var(--transition-fast) ease forwards;
+}
+
+.animate-float {
+  animation: floatAnimation 4s ease-in-out infinite;
+  will-change: transform;  /* promotes to GPU layer */
+}
+
+.animate-spin-slow {
+  animation: spinSlow 12s linear infinite;  /* slowed from 8s */
+  will-change: transform;
+}
+
+.pulse-cyan {
+  animation: pulseGlowCyan 2.5s infinite;
+}
+
+.pulse-red {
+  animation: pulseGlowRed 2.5s infinite;
+}
+
+/* Skeleton loader */
+.shimmer-loader {
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.03) 25%,
+    rgba(255,255,255,0.07) 50%,
+    rgba(255,255,255,0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite;
+  border-radius: var(--border-radius-sm);
+}

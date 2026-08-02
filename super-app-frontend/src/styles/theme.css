@@ -1,0 +1,128 @@
+/* Theme Layout Resets & Configurations */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: var(--font-primary);
+  font-size: 15px;
+  background-color: hsl(var(--bg-primary));
+  color: hsl(var(--text-primary));
+  overflow-x: hidden;
+  line-height: 1.5;
+  transition: background-color var(--transition-normal), color var(--transition-normal);
+}
+
+input, button, textarea, select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+  transition: color var(--transition-fast);
+}
+
+/* Dynamic Opaque Backdrop Rules for Maximum Performance */
+.glass-panel {
+  background-color: hsl(var(--bg-secondary));
+  border: var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-card {
+  background-color: hsl(var(--bg-secondary));
+  border: var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--border-radius-md);
+  padding: 20px;
+  transition: transform var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.glass-card:hover {
+  border-color: hsla(var(--accent-cyan), 0.3);
+  box-shadow: 0 8px 30px rgba(0, 240, 255, 0.08);
+}
+
+.glass-card.premium:hover {
+  border-color: hsla(var(--accent-purple), 0.3);
+  box-shadow: 0 8px 30px rgba(189, 0, 255, 0.08);
+}
+
+/* Glass Inputs */
+.glass-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid hsl(var(--border-color));
+  border-radius: var(--border-radius-sm);
+  color: hsl(var(--text-primary));
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.glass-input:focus {
+  border-color: hsl(var(--accent-cyan));
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: var(--neon-glow-cyan);
+}
+
+/* Premium Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: var(--border-radius-sm);
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, hsl(var(--accent-cyan)), hsl(var(--accent-blue)));
+  color: #000;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+}
+
+.btn-premium {
+  background: linear-gradient(135deg, hsl(var(--accent-purple)), hsl(var(--accent-blue)));
+  color: #fff;
+}
+
+.btn-premium:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px rgba(189, 0, 255, 0.4);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid hsl(var(--border-color));
+  color: hsl(var(--text-primary));
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: hsl(var(--text-secondary));
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, hsl(var(--accent-red)), #b3003b);
+  color: #fff;
+}
+
+.btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px rgba(255, 0, 85, 0.4);
+}

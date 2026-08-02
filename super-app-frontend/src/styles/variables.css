@@ -1,0 +1,71 @@
+:root {
+  /* Premium Typography */
+  --font-primary: 'Outfit', sans-serif;
+  --font-secondary: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* HSL tailored dark-mode colors */
+  --bg-primary: 220 25% 6%;      /* #0b0e14 */
+  --bg-secondary: 220 22% 10%;    /* #121620 */
+  --bg-tertiary: 220 20% 14%;     /* #1b2130 */
+  --bg-glass: 220 25% 8% / 0.65;   /* Glass base */
+  
+  --border-color: 220 18% 18%;    /* Fine borders */
+  --border-glow: 220 15% 24% / 0.3;
+
+  /* Premium Neon Accents */
+  --accent-cyan: 185 100% 50%;    /* #00f0ff - AI/Sentinel primary */
+  --accent-purple: 285 100% 50%;  /* #bd00ff - Premium/Luxury */
+  --accent-green: 150 100% 45%;   /* #00e676 - Safe/Valid */
+  --accent-red: 350 100% 50%;     /* #ff0055 - Anomalous/Alert */
+  --accent-orange: 25 100% 50%;   /* #ff6600 - Warnings/MFA */
+  --accent-blue: 210 100% 55%;    /* #1a8cff - Secondary info */
+
+  /* Text elements */
+  --text-primary: 0 0% 96%;
+  --text-secondary: 220 12% 70%;
+  --text-muted: 220 8% 50%;
+
+  /* Shadow & Glass Effects — kept lightweight for performance */
+  --glass-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.35);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.08);
+  --glass-blur: blur(8px);  /* reduced from 16px — halves GPU cost */
+  --neon-glow-cyan: 0 0 8px rgba(0, 240, 255, 0.25);
+  --neon-glow-red: 0 0 8px rgba(255, 0, 85, 0.25);
+  --neon-glow-purple: 0 0 8px rgba(189, 0, 255, 0.25);
+
+  /* Layout dimensions */
+  --sidebar-width: 260px;
+  --navbar-height: 70px;
+  --bottom-nav-height: 64px;
+  --border-radius-sm: 8px;
+  --border-radius-md: 16px;
+  --border-radius-lg: 24px;
+  --border-radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+  --transition-slow: 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Light Theme overrides for flexibility (accessed via body.theme-light) */
+.theme-light {
+  --bg-primary: 210 30% 98%;
+  --bg-secondary: 210 20% 94%;
+  --bg-tertiary: 210 20% 88%;
+  --bg-glass: 210 30% 96% / 0.75;
+  
+  --border-color: 210 15% 82%;
+  --border-glow: 210 15% 75% / 0.2;
+
+  --text-primary: 220 25% 10%;
+  --text-secondary: 220 15% 35%;
+  --text-muted: 220 10% 55%;
+
+  --glass-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.08);
+  --glass-border: 1px solid rgba(15, 23, 42, 0.06);
+  --neon-glow-cyan: 0 0 12px rgba(0, 240, 255, 0.2);
+  --neon-glow-red: 0 0 12px rgba(255, 0, 85, 0.2);
+  --neon-glow-purple: 0 0 12px rgba(189, 0, 255, 0.2);
+}

@@ -1,0 +1,1 @@
+import{m as r}from"./index-DAArM-I-.js";import e from"./ReelFeed-D5r3IPyG.js";import"./Loader-Bpc4UQii.js";import"./plus-B9Y8Hfc2.js";import"./heart-Cp70J69B.js";const s=()=>r.jsx(e,{});export{s as default};
