@@ -1,0 +1,62 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: sentinel_db
+    restart: always
+    environment:
+      POSTGRES_DB: sentineldb
+      POSTGRES_USER: sentinel
+      POSTGRES_PASSWORD: sentinel123
+    ports:
+      - "5440:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel -d sentineldb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sentinel_net
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: sentinel_pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@sentinel.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - sentinel_net
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sentinel_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://sentinel:sentinel123@db:5432/sentineldb
+      - SYNC_DATABASE_URL=postgresql+psycopg2://sentinel:sentinel123@db:5432/sentineldb
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - sentinel_net
+
+volumes:
+  postgres_data:
+
+networks:
+  sentinel_net:
+    driver: bridge

@@ -1,0 +1,65 @@
+/* Mobile-first enhancements & responsive rules */
+
+@media (max-width: 768px) {
+  :root {
+    --navbar-height: 60px;
+  }
+  
+  .page-container {
+    padding: 16px;
+    min-height: calc(100vh - var(--navbar-height) - var(--bottom-nav-height));
+  }
+  
+  /* Hide sidebar on mobile */
+  .sidebar {
+    display: none !important;
+  }
+  
+  /* Show bottom navigation on mobile */
+  .bottom-navigation {
+    display: flex !important;
+  }
+  
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+@media (min-width: 769px) {
+  /* Hide bottom nav on desktop */
+  .bottom-navigation {
+    display: none !important;
+  }
+  
+  .mobile-only {
+    display: none !important;
+  }
+}
+
+/* Touch friendly interaction utilities */
+.touch-scroller {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+.touch-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.touch-slide {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+}
+
+/* Swipe animations & transitions */
+.active-tab-highlight {
+  position: absolute;
+  bottom: 0;
+  height: 3px;
+  background: hsl(var(--accent-cyan));
+  box-shadow: var(--neon-glow-cyan);
+  transition: all var(--transition-normal);
+}

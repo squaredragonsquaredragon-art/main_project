@@ -1,0 +1,1 @@
+import{m as t}from"./index-DAArM-I-.js";import o from"./Chats-xRa2TqVo.js";import"./Loader-Bpc4UQii.js";import"./formatters-LFKHB4_r.js";import"./phone-Dn00KzAC.js";import"./send-Zu7HOnf1.js";const e=()=>t.jsx(o,{});export{e as default};
