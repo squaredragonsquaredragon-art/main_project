@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "production"
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # WebAuthn / Passkeys
+    WEBAUTHN_RP_ID: str = "localhost"
+    WEBAUTHN_RP_NAME: str = "Sentinel AI"
+    WEBAUTHN_ORIGIN: str = "http://localhost:3001"
+
     # Email
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587

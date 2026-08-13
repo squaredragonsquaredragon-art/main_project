@@ -34,5 +34,17 @@ export const authApi = {
   updateProfile: async (profileData) => {
     const response = await api.patch('/users/me/', profileData);
     return response.data;
-  }
+  },
+
+  // Biometric (WebAuthn) authentication — posts assertion to backend for verification
+  biometricLogin: async (credential) => {
+    const response = await api.post('/auth/biometric-login/', credential);
+    return response.data;
+  },
+
+  // Register biometric credential on backend (optional — for full server-side verification)
+  biometricRegister: async (credentialData) => {
+    const response = await api.post('/auth/biometric-register/', credentialData);
+    return response.data;
+  },
 };

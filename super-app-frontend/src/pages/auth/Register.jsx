@@ -3,7 +3,10 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useNotification } from '../../context/NotificationContext';
 import { validateEmail, validatePassword, validateUsername } from '../../utils/validators';
-import { Mail, Lock, User, UserCheck, Wallet, Clapperboard, ArrowLeft, Phone } from 'lucide-react';
+import { Mail, Lock, User, UserCheck, Wallet, Clapperboard, ArrowLeft, Phone, Fingerprint, ScanFace, ChevronRight, X } from 'lucide-react';
+import { isBiometricAvailable, registerPasskey } from '../../services/biometricService';
+import FaceCameraModal from '../../components/auth/FaceCameraModal';
+import FingerprintModal from '../../components/auth/FingerprintModal';
 
 const Register = () => {
   const [username, setUsername] = useState('');
@@ -17,9 +20,19 @@ const Register = () => {
   const navigate = useNavigate();
   const [activeApp, setActiveApp] = useState('all');
 
+  // ─── Post-registration biometric enrollment state ────────────────────────────────────────
+  const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
+  const [registeredUser, setRegisteredUser] = useState(null); // { username, email }
+  const [biometricSupported, setBiometricSupported] = useState(false);
+  const [biometricEnrolling, setBiometricEnrolling] = useState(null); // 'face' | 'fingerprint' | null
+  const [biometricDone, setBiometricDone] = useState(false);
+  const [showFaceCameraModal, setShowFaceCameraModal] = useState(false);
+  const [showFingerprintModal, setShowFingerprintModal] = useState(false);
+
   useEffect(() => {
     const app = localStorage.getItem('sentinel_active_app') || 'all';
     setActiveApp(app);
+    isBiometricAvailable().then(ok => setBiometricSupported(ok));
   }, []);
 
   const handleSubmit = async (e) => {
@@ -49,10 +62,44 @@ const Register = () => {
 
     if (res.success) {
       addToast('Registration complete! Access credentials created in separate app datastore.', 'success');
-      navigate('/login');
+      if (biometricSupported) {
+        // Show biometric enrollment prompt before going to login
+        setRegisteredUser({ username, email });
+        setShowBiometricPrompt(true);
+      } else {
+        navigate('/login');
+      }
     } else {
       addToast(res.error, 'error');
     }
+  };
+
+  // ─── Biometric enrollment during registration ──────────────────────────────────────────
+  const handleBiometricEnroll = async (type) => {
+    if (type === 'face') {
+      // Open Camera Face Scanner for Face ID registration
+      setShowFaceCameraModal(true);
+      return;
+    }
+    if (type === 'fingerprint') {
+      // Open Laptop Fingerprint Sensor Modal
+      setShowFingerprintModal(true);
+      return;
+    }
+  };
+
+  const handleFingerprintSuccess = () => {
+    setShowFingerprintModal(false);
+    setBiometricDone(true);
+    addToast('Dell Laptop Fingerprint Profile Registered Successfully!', 'success');
+    setTimeout(() => navigate('/login'), 1600);
+  };
+
+  const handleFaceCameraSuccess = () => {
+    setShowFaceCameraModal(false);
+    setBiometricDone(true);
+    addToast('Camera Face ID Profile Registered Successfully!', 'success');
+    setTimeout(() => navigate('/login'), 1600);
   };
 
   const getAppStyle = () => {
@@ -376,6 +423,239 @@ const Register = () => {
           </Link>
         </div>
       </form>
+
+      {/* ─── Post-Registration Biometric Enrollment Modal ─── */}
+      {showBiometricPrompt && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.8)',
+            backdropFilter: 'blur(8px)',
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease',
+          }}
+        >
+          <div
+            style={{
+              background: 'linear-gradient(145deg, rgba(15,23,42,0.99), rgba(8,12,24,0.99))',
+              border: '1px solid rgba(56,189,248,0.2)',
+              borderRadius: '22px',
+              padding: '30px 26px',
+              maxWidth: '360px',
+              width: '100%',
+              boxShadow: '0 28px 70px rgba(0,0,0,0.7), 0 0 0 1px rgba(56,189,248,0.08)',
+              animation: 'slideUp 0.25s ease',
+              position: 'relative',
+            }}
+          >
+            {/* Close / skip */}
+            {!biometricDone && (
+              <button
+                onClick={() => navigate('/login')}
+                style={{
+                  position: 'absolute', top: '14px', right: '14px',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '8px', width: '28px', height: '28px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', color: '#64748b', transition: 'all 0.2s',
+                }}
+                title="Skip — set up later"
+              >
+                <X size={14} />
+              </button>
+            )}
+
+            {/* Success state */}
+            {biometricDone ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', padding: '10px 0' }}>
+                <div style={{
+                  width: '70px', height: '70px', borderRadius: '50%',
+                  background: 'rgba(0,230,118,0.1)', border: '2px solid rgba(0,230,118,0.4)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#00e676', fontSize: '32px',
+                  boxShadow: '0 0 28px rgba(0,230,118,0.3)',
+                  animation: 'scaleUp 0.3s ease',
+                }}>
+                  ✓
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <h3 style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: 800, color: '#f8fafc' }}>Biometric Enrolled!</h3>
+                  <p style={{ margin: 0, color: '#94a3b8', fontSize: '13px' }}>Redirecting to login...</p>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {/* Header */}
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: '56px', height: '56px', borderRadius: '16px',
+                    background: 'linear-gradient(135deg, rgba(56,189,248,0.15), rgba(167,139,250,0.15))',
+                    border: '1px solid rgba(56,189,248,0.25)',
+                    marginBottom: '12px',
+                    boxShadow: '0 0 28px rgba(56,189,248,0.2)',
+                  }}>
+                    <span style={{ fontSize: '26px' }}>🛡️</span>
+                  </div>
+                  <h3 style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: 800, color: '#f8fafc' }}>
+                    Enable Biometric Login
+                  </h3>
+                  <p style={{ margin: 0, color: '#94a3b8', fontSize: '12.5px', lineHeight: 1.6 }}>
+                    Hi <strong style={{ color: '#f8fafc' }}>{registeredUser?.username}</strong>! Set up Face ID or Fingerprint now for instant sign-in every time.
+                  </p>
+                </div>
+
+                {/* Biometric choice buttons */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {/* Face ID */}
+                  <button
+                    id="register-face-id-btn"
+                    onClick={() => handleBiometricEnroll('face')}
+                    disabled={biometricEnrolling !== null}
+                    style={{
+                      width: '100%', height: '58px', borderRadius: '12px',
+                      background: biometricEnrolling === 'face'
+                        ? 'rgba(56,189,248,0.2)'
+                        : 'rgba(56,189,248,0.07)',
+                      border: biometricEnrolling === 'face'
+                        ? '1px solid rgba(56,189,248,0.7)'
+                        : '1px solid rgba(56,189,248,0.22)',
+                      color: '#38bdf8',
+                      cursor: biometricEnrolling ? 'not-allowed' : 'pointer',
+                      display: 'flex', alignItems: 'center', gap: '14px',
+                      padding: '0 18px',
+                      transition: 'all 0.2s ease',
+                      boxShadow: biometricEnrolling === 'face' ? '0 0 20px rgba(56,189,248,0.25)' : 'none',
+                    }}
+                    onMouseEnter={e => {
+                      if (biometricEnrolling) return;
+                      e.currentTarget.style.background = 'rgba(56,189,248,0.13)';
+                      e.currentTarget.style.borderColor = 'rgba(56,189,248,0.5)';
+                    }}
+                    onMouseLeave={e => {
+                      if (biometricEnrolling === 'face') return;
+                      e.currentTarget.style.background = 'rgba(56,189,248,0.07)';
+                      e.currentTarget.style.borderColor = 'rgba(56,189,248,0.22)';
+                    }}
+                  >
+                    <div style={{
+                      width: '38px', height: '38px', borderRadius: '10px',
+                      background: 'rgba(56,189,248,0.12)',
+                      border: '1px solid rgba(56,189,248,0.25)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                      animation: biometricEnrolling === 'face' ? 'pulseGlowCyan 1s infinite' : 'none',
+                    }}>
+                      <ScanFace size={20} />
+                    </div>
+                    <div style={{ textAlign: 'left', flex: 1 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700 }}>
+                        {biometricEnrolling === 'face' ? 'Scanning face...' : 'Set Up Face ID'}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+                        Use your camera for instant recognition
+                      </div>
+                    </div>
+                    {!biometricEnrolling && <ChevronRight size={16} color="#64748b" />}
+                  </button>
+
+                  {/* Fingerprint */}
+                  <button
+                    id="register-fingerprint-btn"
+                    onClick={() => handleBiometricEnroll('fingerprint')}
+                    disabled={biometricEnrolling !== null}
+                    style={{
+                      width: '100%', height: '58px', borderRadius: '12px',
+                      background: biometricEnrolling === 'fingerprint'
+                        ? 'rgba(167,139,250,0.2)'
+                        : 'rgba(167,139,250,0.07)',
+                      border: biometricEnrolling === 'fingerprint'
+                        ? '1px solid rgba(167,139,250,0.7)'
+                        : '1px solid rgba(167,139,250,0.22)',
+                      color: '#a78bfa',
+                      cursor: biometricEnrolling ? 'not-allowed' : 'pointer',
+                      display: 'flex', alignItems: 'center', gap: '14px',
+                      padding: '0 18px',
+                      transition: 'all 0.2s ease',
+                      boxShadow: biometricEnrolling === 'fingerprint' ? '0 0 20px rgba(167,139,250,0.25)' : 'none',
+                    }}
+                    onMouseEnter={e => {
+                      if (biometricEnrolling) return;
+                      e.currentTarget.style.background = 'rgba(167,139,250,0.13)';
+                      e.currentTarget.style.borderColor = 'rgba(167,139,250,0.5)';
+                    }}
+                    onMouseLeave={e => {
+                      if (biometricEnrolling === 'fingerprint') return;
+                      e.currentTarget.style.background = 'rgba(167,139,250,0.07)';
+                      e.currentTarget.style.borderColor = 'rgba(167,139,250,0.22)';
+                    }}
+                  >
+                    <div style={{
+                      width: '38px', height: '38px', borderRadius: '10px',
+                      background: 'rgba(167,139,250,0.12)',
+                      border: '1px solid rgba(167,139,250,0.25)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                      animation: biometricEnrolling === 'fingerprint' ? 'biometricPulse 0.8s infinite' : 'none',
+                    }}>
+                      <Fingerprint size={20} />
+                    </div>
+                    <div style={{ textAlign: 'left', flex: 1 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700 }}>
+                        {biometricEnrolling === 'fingerprint' ? 'Scanning fingerprint...' : 'Set Up Fingerprint'}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+                        Touch your device sensor
+                      </div>
+                    </div>
+                    {!biometricEnrolling && <ChevronRight size={16} color="#64748b" />}
+                  </button>
+                </div>
+
+                {/* Skip link */}
+                <button
+                  onClick={() => navigate('/login')}
+                  style={{
+                    background: 'none', border: 'none', color: '#475569',
+                    fontSize: '12px', cursor: 'pointer', textAlign: 'center',
+                    padding: '4px', transition: 'color 0.2s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.color = '#94a3b8'; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = '#475569'; }}
+                >
+                  Skip — I'll set this up later
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Camera Face Registration Modal ─── */}
+      {showFaceCameraModal && registeredUser && (
+        <FaceCameraModal
+          mode="register"
+          username={registeredUser.username}
+          onSuccess={handleFaceCameraSuccess}
+          onClose={() => setShowFaceCameraModal(false)}
+        />
+      )}
+
+      {/* ─── Dell Laptop Fingerprint Sensor Registration Modal ─── */}
+      {showFingerprintModal && registeredUser && (
+        <FingerprintModal
+          mode="register"
+          username={registeredUser.username}
+          onSuccess={handleFingerprintSuccess}
+          onClose={() => setShowFingerprintModal(false)}
+        />
+      )}
     </div>
   );
 };
