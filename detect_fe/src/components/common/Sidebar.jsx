@@ -4,14 +4,16 @@ import { useAuth } from '../../context/AuthContext';
 import {
   MdDashboard, MdHistory, MdNotifications, MdBarChart,
   MdPerson, MdSupervisorAccount, MdShield, MdLogout,
-  MdChevronLeft, MdChevronRight
+  MdChevronLeft, MdChevronRight, MdChat
 } from 'react-icons/md';
 import { ROLES } from '../../utils/constants';
 import { alertService } from '../../services/alertService';
+import { getToken } from '../../utils/tokenHelper';
 
 const Sidebar = ({ collapsed, onToggle, mobileOpen }) => {
   const { user, logout } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const isSuperAdmin = user?.username === 'qwer1234' || user?.is_superuser === true;
   const isAdmin = user?.role === ROLES.ADMIN || user?.is_staff;
 
@@ -21,12 +23,23 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen }) => {
       try {
         const data = await alertService.getUnreadCount();
         setUnreadCount(data.unread_count || 0);
+
+        const token = getToken() || localStorage.getItem('sentinel_token') || localStorage.getItem('access_token');
+        if (token) {
+          const chatRes = await fetch('/api/chat/admin/unread-count/', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (chatRes.ok) {
+            const chatData = await chatRes.json();
+            setUnreadChatCount(chatData.unread_count || 0);
+          }
+        }
       } catch (err) {
         console.error('Failed to fetch unread badge count:', err);
       }
     };
     fetchCount();
-    const interval = setInterval(fetchCount, 10000);
+    const interval = setInterval(fetchCount, 5000);
     return () => clearInterval(interval);
   }, [user]);
 
@@ -35,6 +48,7 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen }) => {
       section: 'Overview',
       links: [
         { to: '/dashboard', icon: <MdDashboard />, label: 'Dashboard' },
+        { to: '/support-chat', icon: <MdChat />, label: 'Live Support Chat', badge: unreadChatCount > 0 ? String(unreadChatCount) : undefined },
         { to: '/login-history', icon: <MdHistory />, label: 'Login History' },
         { to: '/alerts', icon: <MdNotifications />, label: 'Alerts', badge: unreadCount > 0 ? String(unreadCount) : undefined },
       ]

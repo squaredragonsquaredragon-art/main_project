@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { authApi } from '../api/authApi';
 import storageHelper from '../utils/storageHelper';
+import {
+  authenticateWithPasskey,
+  clearBiometricData,
+} from '../services/biometricService';
 
 export const useAuthStore = create((set, get) => ({
   user: storageHelper.get('sentinel_user', null),
@@ -82,5 +86,35 @@ export const useAuthStore = create((set, get) => ({
       set({ loading: false });
       return { success: false, error: err.response?.data?.detail || 'Update failed' };
     }
-  }
+  },
+
+  // ─── Passkey / Biometric Login ───────────────────────────────────────────
+  loginWithBiometric: async (username) => {
+    set({ loading: true, error: null });
+    try {
+      // authenticateWithPasskey handles the full backend challenge → biometric → JWT flow
+      const result = await authenticateWithPasskey(username);
+
+      if (!result.success) {
+        set({ loading: false, error: result.error });
+        return { success: false, error: result.error };
+      }
+
+      const { access, refresh, user } = result;
+      localStorage.setItem('sentinel_access_token', access);
+      localStorage.setItem('sentinel_refresh_token', refresh);
+      storageHelper.set('sentinel_user', user);
+      set({ user, accessToken: access, refreshToken: refresh, loading: false });
+      return { success: true, user };
+    } catch (err) {
+      const errorMsg = err.message || 'Passkey authentication failed.';
+      set({ error: errorMsg, loading: false });
+      return { success: false, error: errorMsg };
+    }
+  },
+
+  // Clear biometric data on logout (no-op now — credentials are in DB)
+  clearBiometrics: () => {
+    clearBiometricData();
+  },
 }));

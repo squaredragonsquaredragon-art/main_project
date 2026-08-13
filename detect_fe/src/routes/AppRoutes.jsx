@@ -14,6 +14,7 @@ const LoginHistory = lazy(() => import('../pages/LoginHistory'));
 const Admin = lazy(() => import('../pages/Admin'));
 const Profile = lazy(() => import('../pages/Profile'));
 const Reports = lazy(() => import('../pages/Reports'));
+const SupportChat = lazy(() => import('../pages/SupportChat'));
 const NotFound = lazy(() => import('../pages/NotFound'));
 
 const PageFallback = () => (
@@ -48,6 +49,7 @@ const AppRoutes = () => (
         <Route path="/login-history" element={<LoginHistory />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/reports" element={<Reports />} />
+        <Route path="/support-chat" element={<SupportChat />} />
       </Route>
     </Route>
 

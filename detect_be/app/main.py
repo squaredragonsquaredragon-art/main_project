@@ -5,10 +5,10 @@ from contextlib import asynccontextmanager
 from app.config import settings
 from app.database import init_db
 from app.utils.logger import get_logger
-from app.routers import auth_router, login_router, alert_router, user_router, admin_router
+from app.routers import auth_router, login_router, alert_router, user_router, admin_router, passkey_router, face_router, chat_router
 
 # Import all models so SQLAlchemy sees them before create_all
-from app.models import user_model, login_log_model, suspicious_log_model, app_users  # noqa
+from app.models import user_model, login_log_model, suspicious_log_model, app_users, passkey_model, face_model, chat_model  # noqa
 
 logger = get_logger(__name__)
 
@@ -119,7 +119,14 @@ app.add_middleware(
         "http://127.0.0.1:3001",
         "http://localhost:3002",
         "http://127.0.0.1:3002",
+        "http://localhost:3003",
+        "http://127.0.0.1:3003",
+        "http://localhost:3004",
+        "http://127.0.0.1:3004",
+        "http://localhost:3005",
+        "http://127.0.0.1:3005",
     ],
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -132,6 +139,9 @@ app.include_router(user_router.router, prefix=API_PREFIX)
 app.include_router(login_router.router, prefix=API_PREFIX)
 app.include_router(alert_router.router, prefix=API_PREFIX)
 app.include_router(admin_router.router, prefix=API_PREFIX)
+app.include_router(passkey_router.router, prefix=API_PREFIX)
+app.include_router(face_router.router, prefix=API_PREFIX)
+app.include_router(chat_router.router, prefix=API_PREFIX)
 
 
 @app.get("/api/health", tags=["Health"])

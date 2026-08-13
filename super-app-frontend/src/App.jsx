@@ -13,6 +13,8 @@ import './styles/theme.css';
 import './styles/global.css';
 import './styles/mobile.css';
 
+import SupportChatWidget from './components/chat/SupportChatWidget';
+
 const App = () => {
   return (
     <ThemeProvider>
@@ -21,6 +23,7 @@ const App = () => {
           <SecurityProvider>
             <SocketProvider>
               <AppRouter />
+              <SupportChatWidget />
             </SocketProvider>
           </SecurityProvider>
         </AuthProvider>
