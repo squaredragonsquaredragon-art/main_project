@@ -95,11 +95,34 @@ export function AuthProvider({ children }) {
     return registry[key] === true;
   };
 
-  const registerUserForApproval = (username, email) => {
+  const registerUserForApproval = (username, email, extraData = {}) => {
     const registry = getApprovalRegistry();
     if (username) registry[username.toLowerCase().trim()] = false;
     if (email) registry[email.toLowerCase().trim()] = false;
     setApprovalRegistry(registry);
+
+    try {
+      const pendingList = JSON.parse(localStorage.getItem('theftguard_pending_requests') || '[]');
+      const key = username?.toLowerCase().trim();
+      const exists = pendingList.some(p => p.username?.toLowerCase().trim() === key);
+      if (!exists && username) {
+        pendingList.push({
+          id: 'req-' + Date.now(),
+          username: username,
+          email: email,
+          phone: extraData.phone || '',
+          role: 'admin',
+          is_active: false,
+          created_at: new Date().toISOString(),
+          total_logins: 0,
+          suspicious_count: 0,
+          risk_level: 'low'
+        });
+        localStorage.setItem('theftguard_pending_requests', JSON.stringify(pendingList));
+      }
+    } catch (e) {
+      console.error('Failed to store pending request:', e);
+    }
   };
 
   const login = useCallback(async (credentials) => {
@@ -136,13 +159,19 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await authApi.login(credentials);
       
-      const backendActive = data.user && data.user.is_active !== false;
+      const isSuperAdminUser = uName.toLowerCase() === 'qwer1234' || data.user?.is_superuser === true;
+      
+      // Check local approval registry as well
+      const registryApproved = isUserApproved(uName) || (data.user && isUserApproved(data.user.username)) || (data.user && isUserApproved(data.user.email));
+      const isApproved = data.user && (data.user.is_active === true || registryApproved);
 
-      // If backend marks user as inactive and not super admin, block login!
-      if (!backendActive && uName !== SUPER_ADMIN_CREDS.username) {
+      // Strict enforcement: Non-super-admin accounts MUST be active (approved by Super Admin qwer1234)
+      if (!isSuperAdminUser && !isApproved) {
+        registerUserForApproval(uName, data.user?.email || uName, { phone: data.user?.phone_number || '' });
         clearAuth();
+        dispatch({ type: 'LOGOUT' });
         dispatch({ type: 'SET_LOADING', payload: false });
-        const errorMsg = 'Your account is pending Super Admin approval. Please contact Super Admin (qwer1234).';
+        const errorMsg = 'Access Denied: Your account is pending Super Admin approval. Please contact Super Admin (qwer1234).';
         toast.error(errorMsg);
         return { success: false, error: errorMsg };
       }
@@ -166,6 +195,7 @@ export function AuthProvider({ children }) {
         responseDetail.toLowerCase().includes('pending');
 
       if (isPendingMsg) {
+        registerUserForApproval(uName, uName);
         clearAuth();
         const errorMsg = responseDetail || 'Your account is pending Super Admin approval. Please contact Super Admin (qwer1234).';
         toast.error(errorMsg);
@@ -182,7 +212,7 @@ export function AuthProvider({ children }) {
     dispatch({ type: 'SET_LOADING', payload: true });
     try {
       // Register user in local approval registry as pending approval (false)
-      registerUserForApproval(userData.username, userData.email);
+      registerUserForApproval(userData.username, userData.email, userData);
 
       // Call backend register API
       const { data } = await authApi.register({ ...userData, is_active: false }).catch(async () => {

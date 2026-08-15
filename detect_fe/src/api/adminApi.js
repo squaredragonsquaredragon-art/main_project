@@ -6,4 +6,8 @@ export const adminApi = {
   deleteUser: (userId) => api.delete(`/admin/users/${userId}/`),
   getStats: () => api.get('/admin/stats/'),
   getAlerts: () => api.get('/admin/alerts/'),
+  forceLogoutUser: (userId) => api.post(`/admin/users/${userId}/force-logout/`),
+  bulkForceLogoutUsers: (userIds) => api.post('/admin/bulk-force-logout/', { user_ids: userIds }),
+  bulkDeleteUsers: (userIds) => api.post('/admin/bulk-delete-users/', { user_ids: userIds }),
+  resetAllData: () => api.post('/admin/reset-all-data/'),
 };

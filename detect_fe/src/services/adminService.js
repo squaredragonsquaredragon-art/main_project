@@ -25,4 +25,24 @@ export const adminService = {
     const { data } = await adminApi.getAlerts();
     return data;
   },
+
+  forceLogoutUser: async (userId) => {
+    const { data } = await adminApi.forceLogoutUser(userId);
+    return data;
+  },
+
+  bulkForceLogoutUsers: async (userIds) => {
+    const { data } = await adminApi.bulkForceLogoutUsers(userIds);
+    return data;
+  },
+
+  bulkDeleteUsers: async (userIds) => {
+    const { data } = await adminApi.bulkDeleteUsers(userIds);
+    return data;
+  },
+
+  resetAllData: async () => {
+    const { data } = await adminApi.resetAllData();
+    return data;
+  },
 };

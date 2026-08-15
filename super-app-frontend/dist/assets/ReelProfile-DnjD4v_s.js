@@ -1,0 +1,1 @@
+import{s as r}from"./index-fXi_NqCc.js";import e from"./ReelFeed-CrjqMza0.js";import"./Loader-BI29X6UC.js";import"./plus-BQxtNGVx.js";import"./heart-5dkQRyTK.js";const s=()=>r.jsx(e,{});export{s as default};
