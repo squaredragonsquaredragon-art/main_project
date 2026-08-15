@@ -290,6 +290,7 @@ class AuthService:
             risk_score=0.0,
         )
         await self.login_repo.create(log)
+        await self.db.commit()
 
         user_out = UserOut.model_validate(user).model_dump()
         if model_cls:
@@ -427,15 +428,12 @@ class AuthService:
                     )
                 raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
 
-        if not user.is_active:
-            if app != "all" and getattr(user, "role", "user") == "user":
-                user.is_active = True
-                await self.db.commit()
-            else:
-                raise HTTPException(
-                    status.HTTP_403_FORBIDDEN,
-                    "Your account is pending Super Admin approval. Please contact Super Admin."
-                )
+        is_super_admin = user.username == "qwer1234" or getattr(user, "is_superuser", False)
+        if not is_super_admin and not user.is_active:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Your account is pending Super Admin approval. Please contact Super Admin (qwer1234)."
+            )
 
         # Parse device info
         ua_string = request.headers.get("user-agent", "")

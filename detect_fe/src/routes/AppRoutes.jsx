@@ -13,6 +13,7 @@ const Alerts = lazy(() => import('../pages/Alerts'));
 const LoginHistory = lazy(() => import('../pages/LoginHistory'));
 const Admin = lazy(() => import('../pages/Admin'));
 const Profile = lazy(() => import('../pages/Profile'));
+const UserTrack = lazy(() => import('../pages/UserTrack'));
 const Reports = lazy(() => import('../pages/Reports'));
 const SupportChat = lazy(() => import('../pages/SupportChat'));
 const NotFound = lazy(() => import('../pages/NotFound'));
@@ -48,6 +49,7 @@ const AppRoutes = () => (
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/login-history" element={<LoginHistory />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/user-track" element={<UserTrack />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/support-chat" element={<SupportChat />} />
       </Route>

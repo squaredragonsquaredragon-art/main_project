@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
   MdDashboard, MdHistory, MdNotifications, MdBarChart,
   MdPerson, MdSupervisorAccount, MdShield, MdLogout,
-  MdChevronLeft, MdChevronRight, MdChat
+  MdChevronLeft, MdChevronRight, MdChat, MdPeople
 } from 'react-icons/md';
 import { ROLES } from '../../utils/constants';
 import { alertService } from '../../services/alertService';
@@ -15,7 +15,7 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const isSuperAdmin = user?.username === 'qwer1234' || user?.is_superuser === true;
-  const isAdmin = user?.role === ROLES.ADMIN || user?.is_staff;
+  const isAdmin = isSuperAdmin || user?.role === ROLES.ADMIN || user?.role === 'admin' || user?.is_staff === true;
 
   useEffect(() => {
     if (!user) return;
@@ -63,6 +63,7 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen }) => {
       section: 'Account',
       links: [
         { to: '/profile', icon: <MdPerson />, label: 'Profile' },
+        { to: '/user-track', icon: <MdPeople />, label: 'All Users Track' },
       ]
     },
   ];
