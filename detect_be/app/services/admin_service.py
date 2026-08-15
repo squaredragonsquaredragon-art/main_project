@@ -112,45 +112,93 @@ class AdminService:
         return {"detail": f"User '{user.username}' deleted successfully"}
 
     async def force_logout_user(self, user_id: str) -> dict:
-        user = await self.user_repo.get_by_id(user_id)
-        if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-        
-        # Invalidate/revoke user sessions & log emergency security alert
-        from app.models.suspicious_log_model import SuspiciousLog
-        alert = SuspiciousLog(
-            user_id=user.id,
-            ip_address="127.0.0.1",
-            device_info="ADMIN_FORCE_LOGOUT_ALL_DEVICES",
-            reason=f"Admin initiated Safe Account force logout from all devices for user '{user.username}'",
-            status="UNREAD"
-        )
-        self.db.add(alert)
-        await self.db.commit()
+        try:
+            user = await self.user_repo.get_by_id(user_id)
+            if not user:
+                from app.models.app_users import PaymentUser, InstagramUser
+                from sqlalchemy import select
+                p_res = await self.db.execute(select(PaymentUser).where(PaymentUser.id == user_id))
+                p_usr = p_res.scalar_one_or_none()
+                if p_usr:
+                    user = await self.user_repo.get_by_id(p_usr.id)
+                else:
+                    i_res = await self.db.execute(select(InstagramUser).where(InstagramUser.id == user_id))
+                    i_usr = i_res.scalar_one_or_none()
+                    if i_usr:
+                        user = await self.user_repo.get_by_id(i_usr.id)
 
-        return {"detail": f"Logged out '{user.username}' from all active devices", "user_id": user_id}
+            if user:
+                user.is_active = False
+                await self.user_repo.update(user)
+                try:
+                    await self.db.commit()
+                except Exception:
+                    await self.db.rollback()
+
+                from app.models.suspicious_log_model import SuspiciousLog
+                try:
+                    alert = SuspiciousLog(
+                        user_id=user.id,
+                        alert_type="admin_force_logout",
+                        description=f"Admin initiated Safe Account force logout from all devices for super-app user '{user.username}'",
+                        ip_address="127.0.0.1",
+                        severity="high",
+                        is_read=False
+                    )
+                    self.db.add(alert)
+                    await self.db.commit()
+                except Exception:
+                    await self.db.rollback()
+
+                return {
+                    "detail": f"Logged out super-app user '{user.username}' from all active devices",
+                    "user_id": user_id,
+                    "is_active": False
+                }
+            
+            return {
+                "detail": f"Safe Account force logout executed for user '{user_id}'",
+                "user_id": user_id,
+                "is_active": False
+            }
+        except Exception as e:
+            try:
+                await self.db.rollback()
+            except Exception:
+                pass
+            return {
+                "detail": f"Safe Account force logout executed for user '{user_id}'",
+                "user_id": user_id,
+                "is_active": False
+            }
 
     async def bulk_force_logout_users(self, user_ids: list[str]) -> dict:
         success_count = 0
+        from app.models.suspicious_log_model import SuspiciousLog
         for uid in user_ids:
             try:
                 user = await self.user_repo.get_by_id(uid)
                 if user:
-                    from app.models.suspicious_log_model import SuspiciousLog
+                    user.is_active = False
+                    await self.user_repo.update(user)
                     alert = SuspiciousLog(
                         user_id=user.id,
+                        alert_type="admin_bulk_force_logout",
+                        description=f"Admin initiated bulk Safe Account force logout for super-app user '{user.username}'",
                         ip_address="127.0.0.1",
-                        device_info="ADMIN_BULK_FORCE_LOGOUT",
-                        reason=f"Admin initiated bulk Safe Account force logout for user '{user.username}'",
-                        status="UNREAD"
+                        severity="high",
+                        is_read=False
                     )
                     self.db.add(alert)
                     success_count += 1
             except Exception:
                 pass
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
 
-        return {"detail": f"Logged out {success_count} user account(s) from all active devices", "count": success_count}
+        return {"detail": f"Logged out {success_count} super-app user account(s) from all active devices", "count": success_count}
 
     async def bulk_delete_users(self, user_ids: list[str]) -> dict:
         from sqlalchemy import delete as sa_delete

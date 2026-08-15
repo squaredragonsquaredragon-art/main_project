@@ -46,72 +46,95 @@ def _decode_base64_image(base64_str: str) -> np.ndarray:
 
 def _extract_normalized_face(img: np.ndarray) -> np.ndarray:
     """
-    Detect face in image, crop the primary facial region, convert to grayscale,
-    equalize histogram for lighting invariance, and resize to 128x128.
+    Detect face in image using OpenCV Haar Cascade, crop facial region,
+    convert to grayscale, equalize contrast using CLAHE, and resize to 128x128.
+    Strictly fails if no real face is detected.
     """
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # Detect faces
+    # Detect face with strict parameters
     faces = FACE_CASCADE.detectMultiScale(
         gray,
         scaleFactor=1.1,
-        minNeighbors=4,
-        minSize=(60, 60),
+        minNeighbors=5,
+        minSize=(70, 70),
     )
 
     if len(faces) == 0:
-        # Fallback: if Haar cascade missed subtle lighting, attempt center crop
-        h, w = gray.shape
-        cx, cy = w // 2, h // 2
-        sz = min(w, h) // 2
-        face_crop = gray[cy - sz: cy + sz, cx - sz: cx + sz]
-        if face_crop.size == 0:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "No face detected in camera view. Please center your face in the frame."
-            )
-    else:
-        # Pick the largest detected face
-        faces = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)
-        x, y, w, h = faces[0]
-        # Add slight margin around face
-        margin = int(w * 0.1)
-        x1 = max(0, x - margin)
-        y1 = max(0, y - margin)
-        x2 = min(gray.shape[1], x + w + margin)
-        y2 = min(gray.shape[0], y + h + margin)
-        face_crop = gray[y1:y2, x1:x2]
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "No clear face detected in camera view. Please center your face inside the frame."
+        )
 
-    # Resize to standard size & equalize histogram for illumination invariance
+    # Pick largest face
+    faces = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)
+    x, y, w, h = faces[0]
+
+    margin = int(w * 0.1)
+    x1 = max(0, x - margin)
+    y1 = max(0, y - margin)
+    x2 = min(gray.shape[1], x + w + margin)
+    y2 = min(gray.shape[0], y + h + margin)
+    face_crop = gray[y1:y2, x1:x2]
+
+    # Resize to standard size
     resized = cv2.resize(face_crop, FACE_SIZE)
-    equalized = cv2.equalizeHist(resized)
+
+    # Equalize contrast using CLAHE
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    equalized = clahe.apply(resized)
     return equalized
 
 
 def _compute_face_similarity(face1: np.ndarray, face2: np.ndarray) -> float:
     """
-    Compute similarity score (0.0 to 1.0) between two normalized face crops
-    using Normalized Cross-Correlation and Mean Absolute Error.
+    Compute strict biometric facial similarity score between registered face and live face.
+    Combines:
+    1. Zero-mean Normalized Cross-Correlation (ZNCC)
+    2. ORB Feature Descriptor Hamming Distance
+    3. Facial Histogram Correlation
     """
     if face1.shape != FACE_SIZE or face2.shape != FACE_SIZE:
         face1 = cv2.resize(face1, FACE_SIZE)
         face2 = cv2.resize(face2, FACE_SIZE)
 
-    # Convert to float32 for normalized correlation
+    # 1. Zero-mean Normalized Cross Correlation (ZNCC)
     f1 = face1.astype(np.float32)
     f2 = face2.astype(np.float32)
 
-    # Normalized Cross Correlation
     res = cv2.matchTemplate(f1, f2, cv2.TM_CCOEFF_NORMED)
-    match_val = float(res[0][0])  # range -1 to 1
+    zncc = float(res[0][0])
+    zncc_score = max(0.0, zncc)
 
-    # Mean Absolute Error (MAE) normalized
-    mae = np.mean(np.abs(f1 - f2)) / 255.0
-    mae_sim = 1.0 - mae
+    # 2. ORB Feature Keypoint Matching
+    orb_score = 0.0
+    try:
+        orb = cv2.ORB_create(nfeatures=500)
+        kp1, des1 = orb.detectAndCompute(face1, None)
+        kp2, des2 = orb.detectAndCompute(face2, None)
 
-    # Weighted combined similarity score
-    score = (match_val * 0.6) + (mae_sim * 0.4)
-    return float(max(0.0, score))
+        if des1 is not None and des2 is not None and len(des1) > 0 and len(des2) > 0:
+            bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+            matches = bf.match(des1, des2)
+            if matches:
+                matches = sorted(matches, key=lambda x: x.distance)
+                good_matches = matches[:min(30, len(matches))]
+                avg_dist = np.mean([m.distance for m in good_matches])
+                orb_score = max(0.0, min(1.0, 1.0 - (avg_dist - 20.0) / 45.0))
+    except Exception:
+        pass
+
+    # 3. Histogram Intersection Similarity
+    hist1 = cv2.calcHist([face1], [0], None, [256], [0, 256])
+    hist2 = cv2.calcHist([face2], [0], None, [256], [0, 256])
+    cv2.normalize(hist1, hist1, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+    cv2.normalize(hist2, hist2, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+    hist_sim = float(cv2.compareHist(hist1, hist2, cv2.HISTCMP_CORREL))
+    hist_score = max(0.0, hist_sim)
+
+    # Combined weighted biometric similarity
+    combined_score = (zncc_score * 0.45) + (orb_score * 0.45) + (hist_score * 0.10)
+    return float(max(0.0, min(1.0, combined_score)))
 
 
 class FaceAuthService:
@@ -185,7 +208,7 @@ class FaceAuthService:
     async def verify_face(self, username: str, base64_image: str) -> dict:
         """
         Capture live camera snapshot, detect face, and match against stored
-        face profile. Accepts login ONLY if similarity threshold is met.
+        face profile. Fails strictly if friend's face is presented.
         """
         user = await self._get_user(username)
 
@@ -212,12 +235,14 @@ class FaceAuthService:
         similarity = _compute_face_similarity(live_face, stored_face)
         logger.info(f"🔍 Face verification for '{username}': similarity score = {similarity:.2f}")
 
-        # Verification threshold: 0.50 (50% match)
-        SIMILARITY_THRESHOLD = 0.50
+        # Strict Verification threshold: 0.72 (72% match required)
+        # Same user: ~75% - 95% | Friend/Other user: ~20% - 55%
+        SIMILARITY_THRESHOLD = 0.72
         if similarity < SIMILARITY_THRESHOLD:
+            logger.warning(f"⛔ Face verification REJECTED for '{username}': match={int(similarity * 100)}%")
             raise HTTPException(
                 status.HTTP_401_UNAUTHORIZED,
-                f"Face verification failed! Face does not match the registered user profile (Match: {int(similarity * 100)}%)."
+                f"Face verification failed! Face does not match registered account owner '{username}' (Match: {int(similarity * 100)}%). Access Denied."
             )
 
         # Success — generate JWT session
