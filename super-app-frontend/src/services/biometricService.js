@@ -76,8 +76,8 @@ function prepareCreationOptions(optionsInput) {
       id: base64urlToBuffer(userObj.id),
     },
     authenticatorSelection: {
-      authenticatorAttachment: 'platform', // Hardware sensor (Dell Fingerprint Reader)
-      userVerification: 'preferred',
+      authenticatorAttachment: 'platform', // Hardware sensor
+      userVerification: 'required',
       residentKey: 'preferred',
     },
     excludeCredentials: (serverOptions?.excludeCredentials || []).map(c => ({
@@ -100,7 +100,7 @@ function prepareRequestOptions(optionsInput) {
   return {
     ...serverOptions,
     challenge: base64urlToBuffer(serverOptions?.challenge),
-    userVerification: 'preferred',
+    userVerification: 'required',
     allowCredentials: (serverOptions?.allowCredentials || []).map(c => ({
       ...c,
       id: base64urlToBuffer(c.id),
