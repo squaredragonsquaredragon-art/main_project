@@ -21,6 +21,15 @@ export const AuthProvider = ({ children }) => {
     return () => window.removeEventListener('auth_session_expired', handleExpiry);
   }, [logout]);
 
+  // Real-time Safe Account heartbeat: check if Admin force-logged out this user
+  useEffect(() => {
+    if (!accessToken) return;
+    const interval = setInterval(() => {
+      fetchMe();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [accessToken, fetchMe]);
+
   return (
     <AuthContext.Provider value={{ user, loading, error, login, register, logout, updateProfile }}>
       {children}

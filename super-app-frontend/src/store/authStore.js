@@ -68,7 +68,14 @@ export const useAuthStore = create((set, get) => ({
       storageHelper.set('sentinel_user', user);
       set({ user });
     } catch (err) {
-      console.error('Failed to fetch user profiles:', err);
+      console.error('Failed to fetch user profile:', err);
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        localStorage.removeItem('sentinel_access_token');
+        localStorage.removeItem('sentinel_refresh_token');
+        storageHelper.remove('sentinel_user');
+        set({ user: null, accessToken: null, refreshToken: null });
+        window.dispatchEvent(new Event('auth_session_expired'));
+      }
     }
   },
 
