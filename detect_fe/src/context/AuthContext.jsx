@@ -161,9 +161,7 @@ export function AuthProvider({ children }) {
       
       const isSuperAdminUser = uName.toLowerCase() === 'qwer1234' || data.user?.is_superuser === true;
       
-      // Check local approval registry as well
-      const registryApproved = isUserApproved(uName) || (data.user && isUserApproved(data.user.username)) || (data.user && isUserApproved(data.user.email));
-      const isApproved = data.user && (data.user.is_active === true || registryApproved);
+      const isApproved = data.user && data.user.is_active === true;
 
       // Strict enforcement: Non-super-admin accounts MUST be active (approved by Super Admin qwer1234)
       if (!isSuperAdminUser && !isApproved) {

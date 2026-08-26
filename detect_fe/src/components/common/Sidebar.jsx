@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
   MdDashboard, MdHistory, MdNotifications, MdBarChart,
   MdPerson, MdSupervisorAccount, MdShield, MdLogout,
-  MdChevronLeft, MdChevronRight, MdChat, MdPeople
+  MdChevronLeft, MdChevronRight, MdChat, MdPeople, MdSmartToy
 } from 'react-icons/md';
 import { ROLES } from '../../utils/constants';
 import { alertService } from '../../services/alertService';
@@ -49,6 +49,7 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen }) => {
       links: [
         { to: '/dashboard', icon: <MdDashboard />, label: 'Dashboard' },
         { to: '/support-chat', icon: <MdChat />, label: 'Live Support Chat', badge: unreadChatCount > 0 ? String(unreadChatCount) : undefined },
+        { to: '/ai-chat', icon: <MdSmartToy />, label: 'Chat with AI' },
         { to: '/login-history', icon: <MdHistory />, label: 'Login History' },
         { to: '/alerts', icon: <MdNotifications />, label: 'Alerts', badge: unreadCount > 0 ? String(unreadCount) : undefined },
       ]

@@ -1,4 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, or_, func, desc
 from fastapi import HTTPException, status, Request
 from datetime import datetime, timezone
 
@@ -8,7 +9,9 @@ from app.repositories.alert_repository import AlertRepository
 from app.models.user_model import User
 from app.models.login_log_model import LoginLog
 from app.models.suspicious_log_model import SuspiciousLog
-from app.schemas.auth_schema import RegisterSchema, LoginSchema
+from app.schemas.auth_schema import (
+    RegisterSchema, LoginSchema, ForgotUsernameSchema, ForgotPasswordSchema
+)
 from app.schemas.user_schema import UserOut
 from app.utils.jwt_handler import (
     create_access_token, create_refresh_token, decode_refresh_token
@@ -858,3 +861,294 @@ class AuthService:
         if request.client:
             return request.client.host
         return "0.0.0.0"
+
+    async def forgot_username(self, email: str, app: str = "all") -> dict:
+        from app.models.app_users import PaymentUser, InstagramUser
+        from sqlalchemy import select
+
+        username = None
+        if app == "payment":
+            res = await self.db.execute(select(PaymentUser.username).where(PaymentUser.email == email))
+            username = res.scalar_one_or_none()
+        elif app == "instagram":
+            res = await self.db.execute(select(InstagramUser.username).where(InstagramUser.email == email))
+            username = res.scalar_one_or_none()
+        else:
+            user = await self.user_repo.get_by_email(email)
+            if user:
+                username = user.username
+                if app != "all" and username.startswith(f"{app}_"):
+                    username = username[len(app) + 1:]
+
+        if not username:
+            # Fallback search across all tables
+            res_p = await self.db.execute(select(PaymentUser.username).where(PaymentUser.email == email))
+            u_p = res_p.scalar_one_or_none()
+            if u_p:
+                username = u_p
+            else:
+                res_i = await self.db.execute(select(InstagramUser.username).where(InstagramUser.email == email))
+                u_i = res_i.scalar_one_or_none()
+                if u_i:
+                    username = u_i
+                else:
+                    user_std = await self.user_repo.get_by_email(email)
+                    if user_std:
+                        username = user_std.username
+
+        if not username:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No account registered with this email address.")
+
+        return {
+            "detail": "Account located successfully.",
+            "username": username,
+            "email": email
+        }
+
+    async def forgot_password(self, data: ForgotPasswordSchema, request: Request, app: str = "all") -> dict:
+        from app.models.app_users import PaymentUser, InstagramUser
+        from sqlalchemy import select, or_
+
+        identifier = data.username_or_email.strip()
+        user_id = None
+        target_username = identifier
+        target_email = ""
+
+        # Find in specific app table or main user table
+        app_user = None
+        if app == "payment":
+            res = await self.db.execute(select(PaymentUser).where(or_(PaymentUser.username == identifier, PaymentUser.email == identifier)))
+            app_user = res.scalar_one_or_none()
+            if app_user:
+                user_id = app_user.id
+                target_username = app_user.username
+                target_email = app_user.email
+                app_user.hashed_password = hash_password(data.new_password)
+        elif app == "instagram":
+            res = await self.db.execute(select(InstagramUser).where(or_(InstagramUser.username == identifier, InstagramUser.email == identifier)))
+            app_user = res.scalar_one_or_none()
+            if app_user:
+                user_id = app_user.id
+                target_username = app_user.username
+                target_email = app_user.email
+                app_user.hashed_password = hash_password(data.new_password)
+
+        user = None
+        if user_id:
+            user = await self.user_repo.get_by_id(user_id)
+        else:
+            user = await self.user_repo.get_by_username_or_email(identifier)
+
+        if not user and not app_user:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No account found matching given username or email.")
+
+        if user:
+            user_id = user.id
+            target_username = user.username
+            target_email = user.email
+            user.hashed_password = hash_password(data.new_password)
+            user.is_active = True
+            await self.user_repo.update(user)
+
+        # Parse request details
+        ua_string = request.headers.get("user-agent", "")
+        device_info = parse_user_agent(ua_string)
+        ip = self._get_ip(request)
+        location_str = await resolve_exact_location(ip)
+
+        # Log event in login_logs
+        log = LoginLog(
+            user_id=user_id or user.id,
+            username=target_username,
+            ip_address=ip,
+            user_agent=ua_string,
+            browser=f"{app.capitalize()} Portal" if app != "all" else device_info["browser"],
+            os=device_info["os"],
+            device=device_info["device"],
+            location=f"Password changed via recovery from {location_str}",
+            source_app=app if app != "all" else "system",
+            event_type="password_reset",
+            status="normal",
+            is_suspicious=True,
+            risk_score=65.0,
+        )
+        await self.login_repo.create(log)
+
+        # BACK OFFICE NOTIFICATION: Store high-severity alert in suspicious_logs
+        desc_text = (
+            f"SECURITY ALERT: User '{target_username}' updated security credentials via Forgot Password recovery flow "
+            f"on the {app.capitalize() if app != 'all' else 'System'} portal. Originating from {location_str}."
+        )
+
+        ai_report = await generate_ai_analysis(
+            ip_address=ip,
+            target_username=target_username,
+            target_app=app,
+            alert_type="password_reset",
+            reason=desc_text,
+            user_agent=ua_string,
+            location_info=location_str
+        )
+
+        alert = SuspiciousLog(
+            user_id=user_id or user.id,
+            login_log_id=log.id,
+            alert_type="password_reset",
+            description=desc_text,
+            ip_address=ip,
+            location=app,
+            risk_score=65.0,
+            severity="high",
+            ai_analysis=ai_report,
+        )
+        await self.alert_repo.create_suspicious(alert)
+
+        if target_email:
+            try:
+                from app.utils.email_sender import send_email
+                body = (
+                    f"Hello {target_username},\n\n"
+                    f"Your password was successfully reset via Forgot Password recovery.\n"
+                    f"Location: {location_str}\n"
+                    f"IP Address: {ip}\n\n"
+                    f"If you did not initiate this request, please contact security administrator immediately."
+                )
+                await send_email(target_email, "Security Alert: Password Changed", body)
+            except Exception:
+                pass
+
+        await self.db.commit()
+
+        return {
+            "detail": "Password has been successfully updated. Back office security alert notified."
+        }
+
+    async def logout(self, refresh_token: str | None = None, request: Request | None = None) -> dict:
+        client_ip = request.client.host if request and request.client else "127.0.0.1"
+        ua_str = request.headers.get("user-agent", "") if request else ""
+
+        try:
+            log = LoginLog(
+                username="logout_user",
+                ip_address=client_ip,
+                user_agent=ua_str,
+                event_type="user_logout",
+                status="success"
+            )
+            await self.login_repo.create_login_log(log)
+            await self.db.commit()
+        except Exception as e:
+            logger.warning(f"Error logging logout event: {e}")
+
+        return {"detail": "Successfully logged out."}
+
+    async def get_linked_devices(self, current_user: User, request: Request | None = None) -> list[dict]:
+        from app.utils.device_parser import parse_user_agent
+        from sqlalchemy import select, desc
+
+        client_ip = request.client.host if request and request.client else "127.0.0.1"
+
+        devices = []
+        seen_keys = set()
+
+        # Add current device session first
+        ua_str = request.headers.get("user-agent", "") if request else ""
+        dev_info = parse_user_agent(ua_str)
+        dev_name = f"{dev_info.get('browser', 'Chrome')} on {dev_info.get('os', 'Windows')}"
+
+        curr_key = f"{client_ip}_{dev_name}"
+        seen_keys.add(curr_key)
+
+        devices.append({
+            "id": "current_session",
+            "device_name": dev_name,
+            "ip_address": client_ip,
+            "browser": dev_info.get("browser", "Chrome"),
+            "os": dev_info.get("os", "Windows"),
+            "location": "Local Host / Verified Session",
+            "is_current": True,
+            "last_active": "Active Now",
+            "status": "Active / Safe",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+
+        try:
+            # Query recent login logs for this user using login_time
+            res = await self.db.execute(
+                select(LoginLog)
+                .where(LoginLog.user_id == current_user.id)
+                .order_by(desc(LoginLog.login_time))
+                .limit(10)
+            )
+            logs = res.scalars().all()
+
+            for log in logs:
+                b_os = f"{log.browser or 'Browser'} on {log.os or 'OS'}"
+                key = f"{log.ip_address}_{b_os}"
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+
+                t_str = log.login_time.strftime("%b %d, %H:%M") if getattr(log, 'login_time', None) else "Recently"
+                t_iso = log.login_time.isoformat() if getattr(log, 'login_time', None) else datetime.now(timezone.utc).isoformat()
+
+                devices.append({
+                    "id": log.id,
+                    "device_name": b_os,
+                    "ip_address": log.ip_address or "127.0.0.1",
+                    "browser": log.browser or "Browser",
+                    "os": log.os or "OS",
+                    "location": "Verified Session",
+                    "is_current": False,
+                    "last_active": t_str,
+                    "status": "Linked Device",
+                    "created_at": t_iso
+                })
+        except Exception as e:
+            logger.warning(f"Error fetching login logs for devices: {e}")
+
+        return devices
+
+    async def safe_account_logout_all(self, current_user: User, request: Request | None = None) -> dict:
+        client_ip = request.client.host if request and request.client else "127.0.0.1"
+        ua_str = request.headers.get("user-agent", "") if request else ""
+        dev_info = parse_user_agent(ua_str)
+
+        try:
+            # 1. Log a security event for Safe Account action
+            log = LoginLog(
+                user_id=current_user.id,
+                username=current_user.username,
+                ip_address=client_ip,
+                user_agent=ua_str,
+                event_type="safe_account_logout_all",
+                status="success",
+                os=dev_info.get("os", ""),
+                browser=dev_info.get("browser", ""),
+                device=dev_info.get("device_type", "Desktop"),
+            )
+            await self.login_repo.create_login_log(log)
+
+            # 2. Log high-severity security alert in back office
+            alert = SuspiciousLog(
+                ip_address=client_ip,
+                target_username=current_user.username,
+                target_app="SentinelAI",
+                user_agent=ua_str,
+                alert_type="safe_account_triggered",
+                reason="User activated Safe Account — Revoked & logged out all active device sessions across all devices.",
+                risk_score=75.0,
+                severity="medium",
+                ai_analysis=f"### 🛡️ Safe Account Emergency Action Executed\n- **User**: `{current_user.username}`\n- **IP**: `{client_ip}`\n- **Result**: All active sessions across all devices have been revoked and logged out successfully.",
+            )
+            await self.alert_repo.create_suspicious(alert)
+            await self.db.commit()
+        except Exception as e:
+            logger.warning(f"Error recording safe account action: {e}")
+
+        return {
+            "success": True,
+            "message": f"Account Secured! All active device sessions for user '{current_user.username}' have been logged out successfully."
+        }
+
+

@@ -1,0 +1,1 @@
+const a=t=>/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(String(t).toLowerCase()),n=t=>t&&t.length>=6,s=t=>t&&t.trim().length>=3,i=t=>{if(!t||!String(t).trim())return!1;const e=String(t).replace(/[\s\-\(\)]/g,"");return/^(\+?\d{10,15})$/.test(e)};export{n as a,i as b,s as c,a as v};

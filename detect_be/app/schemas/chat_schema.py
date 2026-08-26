@@ -55,3 +55,9 @@ class UserDetailProfile(BaseModel):
     risk_level: str = "NORMAL"
     latest_ip: Optional[str] = "127.0.0.1"
     latest_device: Optional[str] = "Desktop / Browser"
+
+
+class AIChatSchema(BaseModel):
+    message: str
+    history: Optional[list[dict]] = []
+

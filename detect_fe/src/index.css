@@ -137,6 +137,7 @@ a {
   flex: 1;
   margin-left: var(--sidebar-width);
   min-height: 100vh;
+  min-width: 0;
   background: var(--clr-bg-primary);
   transition: margin-left var(--transition-base);
 }
@@ -146,10 +147,12 @@ a {
 }
 
 .page-wrapper {
-  padding: 28px;
-  padding-top: calc(var(--navbar-height) + 28px);
-  max-width: 1440px;
+  padding: 20px;
+  padding-top: calc(var(--navbar-height) + 16px);
+  width: 100%;
+  max-width: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
 }
 
 /* ============================================

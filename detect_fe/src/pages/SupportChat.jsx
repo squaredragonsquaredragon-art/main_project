@@ -211,12 +211,15 @@ const SupportChat = () => {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        height: 'calc(100vh - 100px)',
+        height: 'calc(100vh - 120px)',
+        minHeight: '480px',
         gap: '12px',
         background: '#0b141a',
         borderRadius: '16px',
         overflow: 'hidden',
         padding: '12px',
+        width: '100%',
+        minWidth: 0,
       }}
     >
       {/* ─── MAIN WHATSAPP WEB CONTAINER ─── */}
@@ -224,12 +227,15 @@ const SupportChat = () => {
         style={{
           flex: 1,
           display: 'grid',
-          gridTemplateColumns: showContactDrawer ? '360px 1fr 320px' : '360px 1fr',
+          gridTemplateColumns: showContactDrawer
+            ? 'minmax(220px, 280px) minmax(0, 1fr) minmax(240px, 290px)'
+            : 'minmax(240px, 320px) minmax(0, 1fr)',
           background: '#111b21',
           border: '1px solid #222d34',
           borderRadius: '16px',
           overflow: 'hidden',
           boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
+          minWidth: 0,
         }}
       >
         {/* ─── 1. LEFT SIDEBAR (CONVERSATIONS LIST) ─── */}
@@ -239,6 +245,7 @@ const SupportChat = () => {
             display: 'flex',
             flexDirection: 'column',
             background: '#111b21',
+            minWidth: 0,
           }}
         >
           {/* Left Header */}
@@ -427,7 +434,7 @@ const SupportChat = () => {
 
         {/* ─── 2. MIDDLE CHAT STREAM WINDOW ─── */}
         {selectedUser ? (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0b141a' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0b141a', minWidth: 0 }}>
             {/* Top Bar Header */}
             <div
               style={{
@@ -687,6 +694,7 @@ const SupportChat = () => {
               display: 'flex',
               flexDirection: 'column',
               overflowY: 'auto',
+              minWidth: 0,
             }}
           >
             {/* Drawer Header */}

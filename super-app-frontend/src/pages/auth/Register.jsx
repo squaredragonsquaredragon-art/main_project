@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useNotification } from '../../context/NotificationContext';
-import { validateEmail, validatePassword, validateUsername } from '../../utils/validators';
-import { Mail, Lock, User, UserCheck, Wallet, Clapperboard, ArrowLeft, Phone, Fingerprint, ScanFace, ChevronRight, X } from 'lucide-react';
+import { validateEmail, validatePassword, validateUsername, validatePhoneNumber } from '../../utils/validators';
+import { Mail, Lock, User, UserCheck, Wallet, Clapperboard, ArrowLeft, Phone, Fingerprint, ScanFace, ChevronRight, X, AlertCircle } from 'lucide-react';
 import { isBiometricAvailable, registerPasskey } from '../../services/biometricService';
 import FaceCameraModal from '../../components/auth/FaceCameraModal';
 import FingerprintModal from '../../components/auth/FingerprintModal';
@@ -15,6 +15,10 @@ const Register = () => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [whatsappActivated, setWhatsappActivated] = useState(false);
+  const [whatsappError, setWhatsappError] = useState('');
+  const [formError, setFormError] = useState('');
   const { register, loading } = useAuthStore();
   const { addToast } = useNotification();
   const navigate = useNavigate();
@@ -37,17 +41,46 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setPhoneError('');
+    setFormError('');
 
     if (!validateUsername(username)) {
-      addToast('Username must be at least 3 alphanumeric characters.', 'warning');
+      const msg = 'Username must be at least 3 alphanumeric characters.';
+      addToast(msg, 'warning');
+      setFormError(msg);
       return;
     }
     if (!validateEmail(email)) {
-      addToast('Please enter a valid email address.', 'warning');
+      const msg = 'Please enter a valid email address.';
+      addToast(msg, 'warning');
+      setFormError(msg);
+      return;
+    }
+    if (!phoneNumber || !phoneNumber.trim()) {
+      const msg = 'Phone number is required for 📲 security & WhatsApp alerts.';
+      addToast(msg, 'warning');
+      setPhoneError(msg);
+      setFormError(msg);
+      return;
+    }
+    if (!validatePhoneNumber(phoneNumber)) {
+      const msg = 'Phone number must be 10-15 digits (e.g. +919876543210).';
+      addToast(msg, 'warning');
+      setPhoneError(msg);
+      setFormError(msg);
       return;
     }
     if (!validatePassword(password) || password.length < 8) {
-      addToast('Security password must be at least 8 characters.', 'warning');
+      const msg = 'Security password must be at least 8 characters.';
+      addToast(msg, 'warning');
+      setFormError(msg);
+      return;
+    }
+    if (!whatsappActivated) {
+      const msg = 'Mandatory Step: Please click "📲 Click to Activate WhatsApp Security Alerts *" to complete security registration setup.';
+      addToast(msg, 'warning');
+      setWhatsappError('Activation required before proceeding.');
+      setFormError(msg);
       return;
     }
 
@@ -57,7 +90,7 @@ const Register = () => {
       password,
       first_name: firstName,
       last_name: lastName,
-      phone_number: phoneNumber,
+      phone_number: phoneNumber.trim(),
     });
 
     if (res.success) {
@@ -70,7 +103,12 @@ const Register = () => {
         navigate('/login');
       }
     } else {
-      addToast(res.error, 'error');
+      const errDetail = res.error || 'Registration failed.';
+      addToast(errDetail, 'error');
+      setFormError(errDetail);
+      if (errDetail.toLowerCase().includes('phone')) {
+        setPhoneError(errDetail);
+      }
     }
   };
 
@@ -302,33 +340,66 @@ const Register = () => {
           </div>
         </div>
 
+        {/* Error Alert Banner if formError exists */}
+        {formError && (
+          <div
+            style={{
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
+              borderRadius: '8px',
+              padding: '10px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              color: '#f87171',
+              fontSize: '12px',
+              fontWeight: 600,
+            }}
+          >
+            <AlertCircle size={16} color="#f87171" style={{ flexShrink: 0 }} />
+            <span>{formError}</span>
+          </div>
+        )}
+
         {/* Row 3: Phone Number & Password */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            <label style={{ fontSize: '11px', fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-              Phone <span style={{ color: '#10b981', fontSize: '9px', fontWeight: 600 }}>📲 Alerts</span>
+            <label style={{ fontSize: '11px', fontWeight: 700, color: phoneError ? '#f87171' : '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+              Phone <span style={{ color: '#10b981', fontSize: '9px', fontWeight: 600 }}>📲 Alerts</span> <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <div style={{ position: 'relative' }}>
               <input
                 type="tel"
                 className="glass-input"
                 value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
+                onChange={(e) => {
+                  setPhoneNumber(e.target.value);
+                  if (phoneError) setPhoneError('');
+                  if (formError) setFormError('');
+                }}
                 placeholder="+919876543210"
                 style={{
                   paddingLeft: '34px',
                   height: '36px',
                   fontSize: '12px',
                   borderRadius: '7px',
-                  background: 'rgba(15, 23, 42, 0.6)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  background: phoneError ? 'rgba(239, 68, 68, 0.12)' : 'rgba(15, 23, 42, 0.6)',
+                  border: phoneError ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.1)',
                   color: '#fff',
                   width: '100%',
-                  boxSizing: 'border-box'
+                  boxSizing: 'border-box',
+                  boxShadow: phoneError ? '0 0 10px rgba(239, 68, 68, 0.35)' : 'none',
                 }}
+                required
               />
-              <Phone size={13} color="#10b981" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+              <Phone size={13} color={phoneError ? '#f87171' : '#10b981'} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
             </div>
+            {phoneError && (
+              <span style={{ fontSize: '10px', color: '#f87171', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
+                <AlertCircle size={11} color="#f87171" />
+                {phoneError}
+              </span>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
@@ -360,35 +431,66 @@ const Register = () => {
           </div>
         </div>
 
-        {/* WhatsApp Sandbox Link if Phone entered */}
-        {phoneNumber.trim().length >= 10 && (
-          <a
-            href={`https://web.whatsapp.com/send?phone=14155238886&text=join%20point-fierce`}
-            target="_blank"
-            rel="noopener noreferrer"
+        {/* Mandatory WhatsApp Security Alerts Activation */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+          <button
+            type="button"
+            onClick={() => {
+              window.open('https://web.whatsapp.com/send?phone=14155238886&text=join%20point-fierce', '_blank');
+              setWhatsappActivated(true);
+              setWhatsappError('');
+              if (formError) setFormError('');
+              addToast('WhatsApp Security Alerts Activated!', 'success');
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '6px',
-              padding: '6px 12px',
+              padding: '8px 12px',
               borderRadius: '7px',
-              background: 'linear-gradient(135deg, rgba(37,211,102,0.18), rgba(37,211,102,0.08))',
-              border: '1px solid rgba(37,211,102,0.3)',
-              color: '#25d366',
+              background: whatsappActivated
+                ? 'linear-gradient(135deg, rgba(37,211,102,0.25), rgba(16,185,129,0.15))'
+                : whatsappError
+                ? 'rgba(239, 68, 68, 0.12)'
+                : 'linear-gradient(135deg, rgba(37,211,102,0.18), rgba(37,211,102,0.08))',
+              border: whatsappActivated
+                ? '1px solid rgba(37,211,102,0.6)'
+                : whatsappError
+                ? '1px solid #ef4444'
+                : '1px solid rgba(37,211,102,0.35)',
+              color: whatsappActivated ? '#10b981' : whatsappError ? '#f87171' : '#25d366',
               fontSize: '11px',
               fontWeight: 700,
-              textDecoration: 'none',
               cursor: 'pointer',
               transition: 'all 0.2s ease',
+              boxShadow: whatsappError ? '0 0 10px rgba(239, 68, 68, 0.35)' : whatsappActivated ? '0 0 12px rgba(37,211,102,0.25)' : 'none',
             }}
           >
-            <span>📲 Click to Activate WhatsApp Security Alerts</span>
-            <span style={{ fontSize: '9px', opacity: 0.8, fontWeight: 400, background: 'rgba(37,211,102,0.2)', padding: '1px 5px', borderRadius: '3px' }}>
-              tap Send → done ✓
+            {whatsappActivated ? (
+              <>
+                <span>✓ WhatsApp Security Alerts Activated</span>
+                <span style={{ fontSize: '9px', background: 'rgba(37,211,102,0.25)', padding: '1px 6px', borderRadius: '4px' }}>
+                  Done ✓
+                </span>
+              </>
+            ) : (
+              <>
+                <span>📲 Click to Activate WhatsApp Security Alerts</span>
+                <span style={{ color: '#ef4444' }}>*</span>
+                <span style={{ fontSize: '9px', opacity: 0.9, background: 'rgba(37,211,102,0.2)', padding: '1px 5px', borderRadius: '3px' }}>
+                  tap Send → done ✓
+                </span>
+              </>
+            )}
+          </button>
+          {whatsappError && (
+            <span style={{ fontSize: '10px', color: '#f87171', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
+              <AlertCircle size={11} color="#f87171" />
+              {whatsappError}
             </span>
-          </a>
-        )}
+          )}
+        </div>
 
         <button
           type="submit"

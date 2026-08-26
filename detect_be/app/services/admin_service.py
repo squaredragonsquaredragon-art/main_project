@@ -47,11 +47,13 @@ class AdminService:
     async def update_user(self, user_id: str, data: UserAdminUpdate) -> dict:
         user = await self.user_repo.get_by_id(user_id)
         if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            user = await self.user_repo.get_by_username_or_email(user_id)
+        if not user:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"User '{user_id}' not found")
         for key, val in data.model_dump(exclude_none=True).items():
             setattr(user, key, val)
         await self.user_repo.update(user)
-        return {"detail": "User updated"}
+        return {"detail": f"User '{user.username}' updated successfully"}
 
     async def get_system_stats(self) -> dict:
         users = await self.user_repo.get_all(limit=10000)
@@ -89,17 +91,21 @@ class AdminService:
 
         user = await self.user_repo.get_by_id(user_id)
         if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            user = await self.user_repo.get_by_username_or_email(user_id)
+        if not user:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"User '{user_id}' not found")
+
+        real_user_id = user.id
 
         try:
             # 1. Delete suspicious/alert logs for this user
             await self.db.execute(
-                sa_delete(SuspiciousLog).where(SuspiciousLog.user_id == user_id)
+                sa_delete(SuspiciousLog).where(SuspiciousLog.user_id == real_user_id)
             )
 
             # 2. Delete login logs for this user
             await self.db.execute(
-                sa_delete(LoginLog).where(LoginLog.user_id == user_id)
+                sa_delete(LoginLog).where(LoginLog.user_id == real_user_id)
             )
 
             # 3. Delete the user

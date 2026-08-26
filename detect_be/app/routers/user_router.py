@@ -24,3 +24,24 @@ async def update_profile(
     db: AsyncSession = Depends(get_db),
 ):
     return await UserService(db).update_profile(current_user.id, data)
+
+
+@router.get("/devices/", summary="Get linked devices for user")
+@router.get("/devices", summary="Get linked devices alias")
+async def user_linked_devices(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.auth_service import AuthService
+    return await AuthService(db).get_linked_devices(current_user, None)
+
+
+@router.post("/safe-account/", summary="Safe Account logout all devices for user")
+@router.post("/safe-account", summary="Safe Account alias")
+async def user_safe_account_logout_all(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.auth_service import AuthService
+    return await AuthService(db).safe_account_logout_all(current_user, None)
+

@@ -6,9 +6,9 @@ class RegisterSchema(BaseModel):
     username: str
     email: EmailStr
     password: str
+    phone_number: str
     first_name: str = ""
     last_name: str = ""
-    phone_number: str = ""
 
     @field_validator("username")
     @classmethod
@@ -29,13 +29,14 @@ class RegisterSchema(BaseModel):
     @field_validator("phone_number")
     @classmethod
     def validate_phone_number(cls, v: str) -> str:
-        if not v:
-            return v
+        if not v or not v.strip():
+            raise ValueError("Phone number is required for 📲 security alerts")
         # Accept formats: +91XXXXXXXXXX or 91XXXXXXXXXX or 10-digit number
         cleaned = re.sub(r"[\s\-\(\)]", "", v)
         if not re.match(r"^(\+?\d{10,15})$", cleaned):
             raise ValueError("Phone number must be 10-15 digits (e.g. +919876543210)")
         return cleaned
+
 
 
 class LoginSchema(BaseModel):
@@ -68,3 +69,21 @@ class ChangePasswordSchema(BaseModel):
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters")
         return v
+
+
+class ForgotUsernameSchema(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordSchema(BaseModel):
+    username_or_email: str
+    new_password: str
+    otp_code: str = "123456"
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
+

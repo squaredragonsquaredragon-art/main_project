@@ -271,3 +271,62 @@ class ChatService:
             )
         )
         return {"unread_count": res.scalar_one()}
+
+    async def chat_with_ai(self, user_prompt: str, history: list[dict] = None) -> dict:
+        import os
+        import httpx
+
+        api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+
+        system_prompt = (
+            "STRICT DOMAIN BOUNDARY & POLICY INSTRUCTION:\n"
+            "You are SentinelAI & TheftGuard Security Assistant. "
+            "Your ONLY purpose and domain is System Security, Cyber Security, Threat Analysis, Vulnerability Management, Network Protection, Fraud Prevention, and TheftGuard Operations.\n\n"
+            "STRICT RULE:\n"
+            "If the user asks ANY question or topic outside of System & Cyber Security (such as animals, lions, sports, cooking, history, entertainment, general conversation, or general trivia), "
+            "you MUST REJECT the question politely with the following exact message structure:\n"
+            "\"🛡️ **Sentinel Security Policy Restriction**: I am a specialized AI Assistant restricted strictly to **System & Cyber Security**, Threat Analysis, and Platform Defense. I cannot provide information on non-security topics (such as animals, sports, general trivia, or off-topic subjects). Please ask a cybersecurity or system administration question.\"\n\n"
+            "Do NOT answer off-topic questions under any circumstances."
+        )
+
+        messages = [{"role": "system", "content": system_prompt}]
+        if history:
+            for item in history:
+                if isinstance(item, dict) and "role" in item and "content" in item:
+                    messages.append({"role": item["role"], "content": item["content"]})
+
+        messages.append({"role": "user", "content": user_prompt})
+
+        try:
+            async with httpx.AsyncClient(timeout=25.0) as client:
+                resp = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "gpt-4o",
+                        "messages": messages,
+                        "temperature": 0.3,
+                        "max_tokens": 1200,
+                    }
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    reply = data["choices"][0]["message"]["content"]
+                    return {"reply": reply, "model": "gpt-4o"}
+                else:
+                    err_msg = resp.text
+                    try:
+                        err_json = resp.json()
+                        err_msg = err_json.get("error", {}).get("message", resp.text)
+                    except Exception:
+                        pass
+                    raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=f"OpenAI API Error ({resp.status_code}): {err_msg}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error calling OpenAI API: {e}")
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"AI Chat Service Error: {str(e)}")
+

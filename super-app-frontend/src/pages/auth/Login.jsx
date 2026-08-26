@@ -1,51 +1,93 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useNotification } from '../../context/NotificationContext';
-import { Mail, Lock, LogIn, Wallet, Clapperboard, ArrowLeft, Shield, Fingerprint, ScanFace } from 'lucide-react';
-import { isBiometricAvailable, registerPasskey } from '../../services/biometricService';
-import BiometricSetup from './BiometricSetup';
+import {
+  Mail, Lock, LogIn, Wallet, Clapperboard, ArrowLeft, Shield,
+  Fingerprint, ScanFace, AlertCircle, ShieldCheck, X, Sparkles, Key
+} from 'lucide-react';
+import { isBiometricAvailable } from '../../services/biometricService';
 import FaceCameraModal from '../../components/auth/FaceCameraModal';
 import FingerprintModal from '../../components/auth/FingerprintModal';
 
 const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const { login, loading, loginWithBiometric } = useAuthStore();
+
+  // Inline field error states
+  const [usernameError, setUsernameError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [formError, setFormError] = useState('');
+
+  const { login, loading } = useAuthStore();
   const { addToast } = useNotification();
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeApp, setActiveApp] = useState('all');
 
   // ─── Biometric state ─────────────────────────────────────────────────────
   const [biometricSupported, setBiometricSupported] = useState(false);
-  const [biometricSetupModal, setBiometricSetupModal] = useState(null); // 'face' | 'fingerprint' | null
-  const [biometricLoading, setBiometricLoading] = useState(false);
+  const [showBiometricSelector, setShowBiometricSelector] = useState(false);
   const [showFaceCameraModal, setShowFaceCameraModal] = useState(false);
   const [showFingerprintModal, setShowFingerprintModal] = useState(false);
 
   useEffect(() => {
     const app = localStorage.getItem('sentinel_active_app') || 'all';
     setActiveApp(app);
-    // Check biometric support asynchronously
+    if (location.state?.prefilledUsername) {
+      setUsername(location.state.prefilledUsername);
+    }
     isBiometricAvailable().then(available => setBiometricSupported(available));
-  }, []);
+  }, [location.state]);
 
+  // ─── Step 1: Validate Username & Password before Biometric prompt ─────────
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!username || !password) {
-      addToast('Please enter both credentials.', 'warning');
+    setUsernameError('');
+    setPasswordError('');
+    setFormError('');
+
+    let valid = true;
+    if (!username || !username.trim()) {
+      setUsernameError('Username or Email is mandatory.');
+      valid = false;
+    }
+    if (!password || !password.trim()) {
+      setPasswordError('Password is mandatory.');
+      valid = false;
+    }
+
+    if (!valid) {
+      const msg = 'Username/Email and Password are both mandatory.';
+      addToast(msg, 'warning');
+      setFormError(msg);
       return;
     }
 
-    const res = await login({ username, password });
-    if (res.success) {
-      addToast(`Session decrypted successfully. Welcome back, ${res.user.username}!`, 'success');
-      redirectAfterLogin(res.user);
-    } else {
-      addToast(res.error, 'error');
-      if (res.details?.status === 'suspicious') {
-        navigate('/suspicious-login');
+    // MANDATORY BIOMETRIC REQUIREMENT: Open Biometric Selection Modal
+    setShowBiometricSelector(true);
+    addToast('Mandatory Security Clearance: Select Face ID or Fingerprint to complete sign in.', 'info');
+  };
+
+  // ─── Step 2: Finalize login after Biometric verification succeeds ────────
+  const finalizeLogin = async () => {
+    try {
+      const res = await login({ username: username.trim(), password });
+      if (res.success) {
+        addToast(`Mandatory Multi-Factor Authentication Verified! Welcome back, ${res.user.username}!`, 'success');
+        redirectAfterLogin(res.user);
+      } else {
+        const errorMsg = res.error || 'Authentication failed. Please verify credentials.';
+        setFormError(errorMsg);
+        addToast(errorMsg, 'error');
+        if (res.details?.status === 'suspicious') {
+          navigate('/suspicious-login');
+        }
       }
+    } catch (err) {
+      const msg = err.message || 'Login failed.';
+      setFormError(msg);
+      addToast(msg, 'error');
     }
   };
 
@@ -57,53 +99,41 @@ const Login = () => {
     else navigate('/');
   };
 
-  // ─── Biometric handlers ───────────────────────────────────────────────────
-  const handleBiometricClick = (type) => {
-    if (!username.trim()) {
-      addToast('Enter your username above first, then tap Face ID / Fingerprint.', 'warning');
-      return;
-    }
-    if (type === 'face') {
-      // Open Live Camera Facial Recognition Modal!
-      setShowFaceCameraModal(true);
-      return;
-    }
-    if (type === 'fingerprint') {
-      // Open Laptop Fingerprint Sensor Modal!
-      setShowFingerprintModal(true);
-      return;
-    }
-    // WebAuthn fallback
-    handleBiometricAuth(type);
-  };
+  // ─── Biometric Click Handlers ─────────────────────────────────────────────
+  const triggerBiometricScan = (type) => {
+    setUsernameError('');
+    setPasswordError('');
+    setFormError('');
 
-  const handleFingerprintSuccess = (data) => {
-    setShowFingerprintModal(false);
-    if (data.access && data.refresh && data.user) {
-      localStorage.setItem('sentinel_access_token', data.access);
-      localStorage.setItem('sentinel_refresh_token', data.refresh);
-      useAuthStore.setState({ user: data.user, accessToken: data.access, refreshToken: data.refresh });
-      addToast(`Fingerprint Verified! Welcome back, ${data.user.username}!`, 'success');
-      redirectAfterLogin(data.user);
+    if (!username.trim()) {
+      setUsernameError('Username or Email is required for biometric authentication.');
+      setFormError('Username or Email is mandatory before scanning biometrics.');
+      addToast('Please enter your Username or Email above first.', 'warning');
+      return;
+    }
+    if (!password.trim()) {
+      setPasswordError('Password is required.');
+      setFormError('Password is mandatory for complete session authentication.');
+      addToast('Please enter your Password above first.', 'warning');
+      return;
+    }
+
+    setShowBiometricSelector(false);
+    if (type === 'face') {
+      setShowFaceCameraModal(true);
+    } else if (type === 'fingerprint') {
+      setShowFingerprintModal(true);
     }
   };
 
   const handleFaceCameraSuccess = (data) => {
     setShowFaceCameraModal(false);
-    // Save tokens and session to store
-    localStorage.setItem('sentinel_access_token', data.access);
-    localStorage.setItem('sentinel_refresh_token', data.refresh);
-    useAuthStore.setState({ user: data.user, accessToken: data.access, refreshToken: data.refresh });
-    addToast(`Face Verified (${data.similarity_score}% match). Welcome back, ${data.user.username}!`, 'success');
-    redirectAfterLogin(data.user);
+    finalizeLogin();
   };
 
-  // Called when BiometricSetup completes enrollment
-  const handleBiometricSetupSuccess = async (type) => {
-    setBiometricSetupModal(null);
-    addToast(`${type === 'face' ? 'Face ID' : 'Fingerprint'} registered! Signing you in...`, 'success');
-    // Now authenticate with the newly registered passkey
-    setTimeout(() => handleBiometricAuth(type), 500);
+  const handleFingerprintSuccess = (data) => {
+    setShowFingerprintModal(false);
+    finalizeLogin();
   };
 
   const getAppStyle = () => {
@@ -168,12 +198,12 @@ const Login = () => {
           Portal
         </button>
         <span style={{ fontSize: '10px', color: '#64748b', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-          Secure Authentication
+          Mandatory MFA Authentication
         </span>
       </div>
 
       {/* Header */}
-      <div style={{ textAlign: 'center', margin: '2px 0 6px' }}>
+      <div style={{ textAlign: 'center', margin: '2px 0 4px' }}>
         <div
           style={{
             display: 'inline-flex',
@@ -198,77 +228,141 @@ const Login = () => {
         </p>
       </div>
 
+      {/* Form Error Banner */}
+      {formError && (
+        <div
+          style={{
+            background: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
+            borderRadius: '8px',
+            padding: '10px 12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            color: '#f87171',
+            fontSize: '12px',
+            fontWeight: 600,
+          }}
+        >
+          <AlertCircle size={16} color="#f87171" style={{ flexShrink: 0 }} />
+          <span>{formError}</span>
+        </div>
+      )}
+
       {/* Form */}
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {/* Username / Email field */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '11px', fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            Username or Email
+          <label style={{ fontSize: '11px', fontWeight: 700, color: usernameError ? '#f87171' : '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Username or Email <span style={{ color: '#ef4444' }}>*</span>
           </label>
           <div style={{ position: 'relative' }}>
             <input
               type="text"
               className="glass-input"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter credentials..."
+              onChange={(e) => {
+                setUsername(e.target.value);
+                if (usernameError) setUsernameError('');
+                if (formError) setFormError('');
+              }}
+              placeholder="Enter username or email..."
               style={{
                 paddingLeft: '38px',
                 height: '40px',
                 fontSize: '13px',
                 borderRadius: '8px',
-                background: 'rgba(15, 23, 42, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: usernameError ? 'rgba(239, 68, 68, 0.12)' : 'rgba(15, 23, 42, 0.6)',
+                border: usernameError ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.1)',
                 color: '#fff',
                 width: '100%',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                boxShadow: usernameError ? '0 0 10px rgba(239, 68, 68, 0.35)' : 'none',
               }}
               disabled={loading}
               required
             />
             <Mail
               size={15}
-              color="#64748b"
+              color={usernameError ? '#f87171' : '#64748b'}
               style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}
             />
           </div>
+          {usernameError && (
+            <span style={{ fontSize: '10px', color: '#f87171', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
+              <AlertCircle size={11} color="#f87171" />
+              {usernameError}
+            </span>
+          )}
         </div>
 
+        {/* Password field */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label style={{ fontSize: '11px', fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Password
+            <label style={{ fontSize: '11px', fontWeight: 700, color: passwordError ? '#f87171' : '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Password <span style={{ color: '#ef4444' }}>*</span>
             </label>
+            <div style={{ display: 'flex', gap: '8px', fontSize: '11px', alignItems: 'center' }}>
+              <Link
+                to="/forgot-username"
+                style={{ color: '#94a3b8', textDecoration: 'none', fontWeight: 600, transition: 'color 0.2s' }}
+                onMouseEnter={(e) => e.currentTarget.style.color = style.accent}
+                onMouseLeave={(e) => e.currentTarget.style.color = '#94a3b8'}
+              >
+                Forgot Username?
+              </Link>
+              <span style={{ color: '#475569' }}>|</span>
+              <Link
+                to="/forgot-password"
+                style={{ color: style.accent, textDecoration: 'none', fontWeight: 600, transition: 'opacity 0.2s' }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+              >
+                Forgot Password?
+              </Link>
+            </div>
           </div>
           <div style={{ position: 'relative' }}>
             <input
               type="password"
               className="glass-input"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (passwordError) setPasswordError('');
+                if (formError) setFormError('');
+              }}
               placeholder="••••••••"
               style={{
                 paddingLeft: '38px',
                 height: '40px',
                 fontSize: '13px',
                 borderRadius: '8px',
-                background: 'rgba(15, 23, 42, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: passwordError ? 'rgba(239, 68, 68, 0.12)' : 'rgba(15, 23, 42, 0.6)',
+                border: passwordError ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.1)',
                 color: '#fff',
                 width: '100%',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                boxShadow: passwordError ? '0 0 10px rgba(239, 68, 68, 0.35)' : 'none',
               }}
               disabled={loading}
               required
             />
             <Lock
               size={15}
-              color="#64748b"
+              color={passwordError ? '#f87171' : '#64748b'}
               style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}
             />
           </div>
+          {passwordError && (
+            <span style={{ fontSize: '10px', color: '#f87171', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
+              <AlertCircle size={11} color="#f87171" />
+              {passwordError}
+            </span>
+          )}
         </div>
 
-        {/* ─── Sign In Button (existing, unchanged) ─── */}
+        {/* Sign In Button */}
         <button
           type="submit"
           style={{
@@ -292,10 +386,10 @@ const Login = () => {
           disabled={loading}
         >
           <LogIn size={16} />
-          {loading ? 'Authenticating...' : 'Sign In'}
+          {loading ? 'Authenticating...' : 'Sign In (Step 1 of 2)'}
         </button>
 
-        {/* ─── Biometric Section ─── */}
+        {/* ─── Biometric Quick Buttons ─── */}
         {biometricSupported && (
           <>
             {/* OR Divider */}
@@ -307,7 +401,7 @@ const Login = () => {
             }}>
               <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.07)' }} />
               <span style={{ fontSize: '10px', fontWeight: 700, color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                or use biometrics
+                Mandatory Step 2 Biometric Scan
               </span>
               <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.07)' }} />
             </div>
@@ -318,49 +412,38 @@ const Login = () => {
               <button
                 id="login-face-id-btn"
                 type="button"
-                onClick={() => handleBiometricClick('face')}
-                disabled={biometricLoading !== false || loading}
+                onClick={() => triggerBiometricScan('face')}
+                disabled={loading}
                 style={{
                   flex: 1,
                   height: '48px',
                   borderRadius: '10px',
-                  background: biometricLoading === 'face'
-                    ? 'rgba(56, 189, 248, 0.15)'
-                    : 'rgba(56, 189, 248, 0.06)',
-                  border: biometricLoading === 'face'
-                    ? '1px solid rgba(56, 189, 248, 0.6)'
-                    : '1px solid rgba(56, 189, 248, 0.2)',
+                  background: 'rgba(56, 189, 248, 0.06)',
+                  border: '1px solid rgba(56, 189, 248, 0.2)',
                   color: '#38bdf8',
-                  cursor: biometricLoading || loading ? 'not-allowed' : 'pointer',
+                  cursor: loading ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '3px',
                   transition: 'all 0.2s ease',
-                  boxShadow: biometricLoading === 'face' ? '0 0 16px rgba(56, 189, 248, 0.25)' : 'none',
                 }}
                 onMouseEnter={e => {
-                  if (biometricLoading || loading) return;
+                  if (loading) return;
                   e.currentTarget.style.background = 'rgba(56, 189, 248, 0.12)';
                   e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.45)';
                   e.currentTarget.style.boxShadow = '0 0 14px rgba(56, 189, 248, 0.2)';
                 }}
                 onMouseLeave={e => {
-                  if (biometricLoading === 'face') return;
                   e.currentTarget.style.background = 'rgba(56, 189, 248, 0.06)';
                   e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.2)';
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
-                <ScanFace
-                  size={20}
-                  style={{
-                    animation: biometricLoading === 'face' ? 'pulseGlowCyan 1s ease-in-out infinite' : 'none',
-                  }}
-                />
+                <ScanFace size={20} />
                 <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.03em' }}>
-                  {biometricLoading === 'face' ? 'Scanning...' : 'Face ID'}
+                  Scan Face ID
                 </span>
               </button>
 
@@ -368,49 +451,38 @@ const Login = () => {
               <button
                 id="login-fingerprint-btn"
                 type="button"
-                onClick={() => handleBiometricClick('fingerprint')}
-                disabled={biometricLoading !== false || loading}
+                onClick={() => triggerBiometricScan('fingerprint')}
+                disabled={loading}
                 style={{
                   flex: 1,
                   height: '48px',
                   borderRadius: '10px',
-                  background: biometricLoading === 'fingerprint'
-                    ? 'rgba(167, 139, 250, 0.15)'
-                    : 'rgba(167, 139, 250, 0.06)',
-                  border: biometricLoading === 'fingerprint'
-                    ? '1px solid rgba(167, 139, 250, 0.6)'
-                    : '1px solid rgba(167, 139, 250, 0.2)',
+                  background: 'rgba(167, 139, 250, 0.06)',
+                  border: '1px solid rgba(167, 139, 250, 0.2)',
                   color: '#a78bfa',
-                  cursor: biometricLoading || loading ? 'not-allowed' : 'pointer',
+                  cursor: loading ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '3px',
                   transition: 'all 0.2s ease',
-                  boxShadow: biometricLoading === 'fingerprint' ? '0 0 16px rgba(167, 139, 250, 0.25)' : 'none',
                 }}
                 onMouseEnter={e => {
-                  if (biometricLoading || loading) return;
+                  if (loading) return;
                   e.currentTarget.style.background = 'rgba(167, 139, 250, 0.12)';
                   e.currentTarget.style.borderColor = 'rgba(167, 139, 250, 0.45)';
                   e.currentTarget.style.boxShadow = '0 0 14px rgba(167, 139, 250, 0.2)';
                 }}
                 onMouseLeave={e => {
-                  if (biometricLoading === 'fingerprint') return;
                   e.currentTarget.style.background = 'rgba(167, 139, 250, 0.06)';
                   e.currentTarget.style.borderColor = 'rgba(167, 139, 250, 0.2)';
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
-                <Fingerprint
-                  size={20}
-                  style={{
-                    animation: biometricLoading === 'fingerprint' ? 'biometricPulse 0.8s ease-in-out infinite' : 'none',
-                  }}
-                />
+                <Fingerprint size={20} />
                 <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.03em' }}>
-                  {biometricLoading === 'fingerprint' ? 'Scanning...' : 'Fingerprint'}
+                  Scan Fingerprint
                 </span>
               </button>
             </div>
@@ -425,14 +497,141 @@ const Login = () => {
         </div>
       </form>
 
-      {/* ─── Biometric Setup Modal ─── */}
-      {biometricSetupModal && (
-        <BiometricSetup
-          user={{ id: username || 'device_user', username: username || 'sentinel_user' }}
-          type={biometricSetupModal}
-          onSuccess={() => handleBiometricSetupSuccess(biometricSetupModal)}
-          onClose={() => setBiometricSetupModal(null)}
-        />
+      {/* ─── Mandatory Biometric Selector Modal ─── */}
+      {showBiometricSelector && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(5, 10, 20, 0.88)',
+            backdropFilter: 'blur(10px)',
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease',
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '380px',
+              background: 'linear-gradient(145deg, rgba(15,23,42,0.98), rgba(8,12,24,0.99))',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+              borderRadius: '22px',
+              padding: '26px 22px',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.8), 0 0 30px rgba(56,189,248,0.15)',
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+            }}
+          >
+            {/* Close */}
+            <button
+              onClick={() => {
+                setShowBiometricSelector(false);
+                addToast('Biometric verification cancelled. Login incomplete.', 'warning');
+              }}
+              style={{
+                position: 'absolute',
+                top: '14px',
+                right: '14px',
+                width: '28px',
+                height: '28px',
+                borderRadius: '8px',
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                color: '#94a3b8',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <X size={14} />
+            </button>
+
+            {/* Icon */}
+            <div
+              style={{
+                width: '54px',
+                height: '54px',
+                borderRadius: '16px',
+                background: 'linear-gradient(135deg, rgba(56,189,248,0.2), rgba(167,139,250,0.2))',
+                border: '1px solid rgba(56,189,248,0.35)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '12px',
+                boxShadow: '0 0 25px rgba(56,189,248,0.25)',
+                color: '#38bdf8',
+              }}
+            >
+              <ShieldCheck size={28} />
+            </div>
+
+            <h3 style={{ margin: '0 0 4px', fontSize: '18px', fontWeight: 800, color: '#f8fafc' }}>
+              Step 2: Biometric Verification
+            </h3>
+            <p style={{ margin: '0 0 16px', fontSize: '12px', color: '#94a3b8', lineHeight: 1.5 }}>
+              Credentials verified for <strong style={{ color: '#38bdf8' }}>{username}</strong>. Choose Face ID or Fingerprint scan to authorize session access.
+            </p>
+
+            {/* Choice Buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
+              <button
+                type="button"
+                onClick={() => triggerBiometricScan('face')}
+                style={{
+                  width: '100%',
+                  height: '48px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                  border: 'none',
+                  color: '#fff',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  boxShadow: '0 0 20px rgba(56, 189, 248, 0.25)',
+                }}
+              >
+                <ScanFace size={20} />
+                Verify with Face ID Camera
+              </button>
+
+              <button
+                type="button"
+                onClick={() => triggerBiometricScan('fingerprint')}
+                style={{
+                  width: '100%',
+                  height: '48px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)',
+                  border: 'none',
+                  color: '#fff',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  boxShadow: '0 0 20px rgba(167, 139, 250, 0.25)',
+                }}
+              >
+                <Fingerprint size={20} />
+                Verify with Laptop Fingerprint
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ─── Camera Facial Verification Login Modal ─── */}

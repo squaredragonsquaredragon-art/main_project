@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { ShieldAlert, Users, Cpu, Activity, LogOut, ArrowLeft, Moon, Sun } from 'lucide-react';
+import { ShieldAlert, Users, Cpu, Activity, LogOut, ArrowLeft, Moon, Sun, Bot } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useTheme } from '../context/ThemeContext';
 
@@ -16,6 +16,7 @@ const AdminLayout = () => {
 
   const menuItems = [
     { to: '/admin', label: 'Security Dashboard', icon: <ShieldAlert size={16} /> },
+    { to: '/admin/ai-chat', label: 'Chat with AI', icon: <Bot size={16} /> },
     { to: '/admin/users', label: 'User Directory', icon: <Users size={16} /> },
     { to: '/admin/threats', label: 'AI Threat Logs', icon: <Cpu size={16} /> },
     { to: '/admin/alerts', label: 'Incident Records', icon: <Activity size={16} /> }
@@ -230,7 +231,7 @@ const AdminLayout = () => {
           </div>
         </header>
 
-        <main style={{ padding: '32px', flex: 1, overflowY: 'auto' }} className="animate-fade-in">
+        <main style={{ padding: '20px', flex: 1, overflowY: 'auto', minWidth: 0, boxSizing: 'border-box' }} className="animate-fade-in">
           <Outlet />
         </main>
       </div>
