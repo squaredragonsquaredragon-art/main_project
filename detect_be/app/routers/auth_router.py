@@ -23,6 +23,7 @@ async def register(
 
 
 @router.post("/login/", summary="Login and receive JWT tokens")
+@router.post("/login", summary="Login alias")
 async def login(
     data: LoginSchema,
     request: Request,
@@ -30,6 +31,17 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     return await AuthService(db).login(data, request, app)
+
+
+@router.post("/verify-credentials/", summary="Verify Username & Password credentials before Biometric prompt")
+@router.post("/verify-credentials", summary="Verify credentials alias")
+async def verify_credentials(
+    data: LoginSchema,
+    request: Request,
+    app: str = Query("all"),
+    db: AsyncSession = Depends(get_db),
+):
+    return await AuthService(db).verify_credentials(data, request, app)
 
 
 @router.post("/token/refresh/", summary="Refresh access token")

@@ -1,1 +1,0 @@
-import{u as o}from"./index-0bDPbYzt.js";import r from"./ReelFeed-CgaLt60r.js";import"./Loader-C5F2P54X.js";import"./plus-BF3DSGgd.js";import"./heart-Ck0b1Zhx.js";const s=()=>o.jsx(r,{});export{s as default};

@@ -311,6 +311,48 @@ class AuthService:
         tokens = self._tokens(user.id)
         return {**tokens, "user": user_out}
 
+    async def verify_credentials(self, data: LoginSchema, request: Request, app: str = "all") -> dict:
+        from app.models.app_users import PaymentUser, InstagramUser
+        from sqlalchemy import select, or_
+
+        model_cls = None
+        if app == "payment":
+            model_cls = PaymentUser
+        elif app == "instagram":
+            model_cls = InstagramUser
+
+        user_obj = None
+        if model_cls:
+            result = await self.db.execute(
+                select(model_cls).where(
+                    or_(model_cls.username == data.username, model_cls.email == data.username)
+                )
+            )
+            app_user = result.scalar_one_or_none()
+            if not app_user or not verify_password(data.password, app_user.hashed_password):
+                failed_count = await self._log_failed(data.username, request, app)
+                if failed_count >= 6:
+                    raise HTTPException(status.HTTP_403_FORBIDDEN, "Your account is blocked due to repeated failed attempts. Try again in 5 minutes.")
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid Username/Email or Password credentials.")
+            user_obj = await self.user_repo.get_by_id(app_user.id)
+        else:
+            user_obj = await self.user_repo.get_by_username_or_email(data.username)
+            if not user_obj or not verify_password(data.password, user_obj.hashed_password):
+                failed_count = await self._log_failed(data.username, request, "all")
+                if failed_count >= 6:
+                    raise HTTPException(status.HTTP_403_FORBIDDEN, "Your account is blocked due to repeated failed attempts. Try again in 5 minutes.")
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid Username/Email or Password credentials.")
+
+        if user_obj and not user_obj.is_active:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Your account is pending Super Admin approval or blocked.")
+
+        return {
+            "valid": True,
+            "username": user_obj.username if user_obj else data.username,
+            "email": user_obj.email if user_obj else "",
+            "message": "Credentials verified successfully."
+        }
+
     async def login(self, data: LoginSchema, request: Request, app: str = "all") -> dict:
         from app.models.app_users import PaymentUser, InstagramUser
         from sqlalchemy import select, or_, desc
@@ -525,8 +567,14 @@ class AuthService:
                     await send_suspicious_login_alert(
                         user.email, user.username, ip, "Unknown", device_info["browser"]
                     )
-                except Exception:
-                    pass
+        # Send security email alert notification upon completed login attempt
+        if user and user.email:
+            try:
+                from app.utils.email_sender import send_login_success_alert
+                loc_name = await resolve_exact_location(ip)
+                await send_login_success_alert(user.email, user.username, ip, loc_name, device_info["browser"])
+            except Exception as e:
+                logger.warning(f"Login completion email alert notice: {e}")
 
         tokens = self._tokens(user.id)
         user_out = UserOut.model_validate(user).model_dump()

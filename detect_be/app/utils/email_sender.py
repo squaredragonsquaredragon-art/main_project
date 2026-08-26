@@ -126,3 +126,45 @@ async def send_brute_force_alert(
     """
     return await send_email(to, f"🚨 Security Alert: Repeated Login Failures on {app_name}", html)
 
+
+async def send_login_success_alert(to: str, username: str, ip: str, location: str, browser: str) -> bool:
+    html = f"""
+    <div style="font-family:'Inter', sans-serif; background:#060b18; padding:32px; border-radius:16px; color:#e2e8f0; max-width:500px; margin:0 auto; border: 1px solid rgba(255,255,255,0.08);">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <span style="font-size: 2.5rem;">🔒</span>
+        <h2 style="color:#10b981; margin:8px 0 4px 0; font-size: 1.4rem; font-weight: 700;">Account Sign-In Verified</h2>
+        <p style="color:#94a3b8; margin:0; font-size: 0.85rem;">Multi-Factor Biometric Security Clearance</p>
+      </div>
+      
+      <p>Hi <strong>{username}</strong>,</p>
+      <p>A new login attempt was verified for your account with <strong>Multi-Factor Biometric Security Clearance</strong>.</p>
+      
+      <div style="background:#0f1b2e; border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:16px; margin:16px 0;">
+        <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+          <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <td style="padding:8px 0; color:#94a3b8;">User Account</td>
+            <td style="padding:8px 0; font-weight: 600; color:#e2e8f0; text-align: right;">{username}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <td style="padding:8px 0; color:#94a3b8;">IP Address</td>
+            <td style="padding:8px 0; font-family:monospace; color:#60a5fa; text-align: right;">{ip}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <td style="padding:8px 0; color:#94a3b8;">Browser / Client</td>
+            <td style="padding:8px 0; color:#e2e8f0; text-align: right;">{browser}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0; color:#94a3b8;">Location</td>
+            <td style="padding:8px 0; color:#e2e8f0; text-align: right;">{location}</td>
+          </tr>
+        </table>
+      </div>
+
+      <p style="color:#64748b; font-size:0.75rem; text-align: center; margin-top: 20px;">
+        SentinelAI Security Notification • If you did not perform this login, click Safe Account in Security Settings to revoke all devices.
+      </p>
+    </div>
+    """
+    return await send_email(to, f"🔒 SentinelAI Security Notification: Sign-In Verified for {username}", html)
+
+

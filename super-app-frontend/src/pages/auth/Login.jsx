@@ -7,6 +7,7 @@ import {
   Fingerprint, ScanFace, AlertCircle, ShieldCheck, X, Sparkles, Key
 } from 'lucide-react';
 import { isBiometricAvailable } from '../../services/biometricService';
+import { authApi } from '../../api/authApi';
 import FaceCameraModal from '../../components/auth/FaceCameraModal';
 import FingerprintModal from '../../components/auth/FingerprintModal';
 
@@ -64,9 +65,17 @@ const Login = () => {
       return;
     }
 
-    // MANDATORY BIOMETRIC REQUIREMENT: Open Biometric Selection Modal
-    setShowBiometricSelector(true);
-    addToast('Mandatory Security Clearance: Select Face ID or Fingerprint to complete sign in.', 'info');
+    // MANDATORY REQUIREMENT: VERIFY CREDENTIALS FIRST BEFORE FACE ID / FINGERPRINT MODAL
+    try {
+      await authApi.verifyCredentials({ username: username.trim(), password }, activeApp);
+      // Both credentials are valid! Proceed to Face ID / Fingerprint verification!
+      setShowBiometricSelector(true);
+      addToast('Credentials Verified! Select Face ID or Fingerprint to complete sign in.', 'info');
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || err.message || 'Invalid Username/Email or Password credentials.';
+      setFormError(errorMsg);
+      addToast(errorMsg, 'error');
+    }
   };
 
   // ─── Step 2: Finalize login after Biometric verification succeeds ────────
