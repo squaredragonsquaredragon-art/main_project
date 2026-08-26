@@ -42,30 +42,25 @@ const Admin = () => {
         })),
       ]);
 
-      // Read local approval registry & pending requests
-      const approvalRegistry = JSON.parse(localStorage.getItem('theftguard_user_approvals') || '{}');
+      // Read local pending requests if any
       const pendingRequests = JSON.parse(localStorage.getItem('theftguard_pending_requests') || '[]');
 
       // Combine backend users and local pending requests
       const userMap = new Map();
 
-      // Add backend users first
+      // Add backend users first — backend DB is single source of truth for is_active!
       (usersData || []).forEach((u) => {
         const key = u.email ? u.email.toLowerCase().trim() : u.username?.toLowerCase().trim();
         if (key && key !== 'qwer1234' && key !== 'qwer1234@gmail.com') {
-          const isApprovedLocally = approvalRegistry[key] || approvalRegistry[u.username?.toLowerCase().trim()];
-          const isActiveState = isApprovedLocally !== undefined ? isApprovedLocally : u.is_active;
-          userMap.set(key, { ...u, is_active: isActiveState });
+          userMap.set(key, { ...u });
         }
       });
 
-      // Add local pending requests if not already in map
+      // Add local pending requests if not already present in backend users
       (pendingRequests || []).forEach((p) => {
         const key = p.email ? p.email.toLowerCase().trim() : p.username?.toLowerCase().trim();
         if (key && !userMap.has(key)) {
-          const isApprovedLocally = approvalRegistry[key] || approvalRegistry[p.username?.toLowerCase().trim()];
-          const isActiveState = isApprovedLocally !== undefined ? isApprovedLocally : p.is_active;
-          userMap.set(key, { ...p, is_active: isActiveState });
+          userMap.set(key, { ...p, is_active: p.is_active ?? false });
         }
       });
 
@@ -148,9 +143,11 @@ const Admin = () => {
       // Update local approval registry
       updateApprovalRegistry(username, email, newActiveState);
 
-      await adminService.updateUser(userId, { is_active: newActiveState }).catch(() => { });
+      const isTempId = userId && (userId.startsWith('req_') || userId.startsWith('req-'));
+      const targetIdentifier = (!isTempId) ? userId : (username || email);
+      await adminService.updateUser(targetIdentifier, { is_active: newActiveState });
 
-      toast.success(newActiveState ? `Successfully APPROVED ${username}! User can now log in.` : `Successfully BLOCKED ${username}`);
+      toast.success(newActiveState ? `Successfully APPROVED ${username || email}! User can now log in.` : `Successfully BLOCKED ${username || email}`);
 
       // Optimistically update local state
       setUsers((prev) =>
@@ -160,7 +157,7 @@ const Admin = () => {
       fetchAdminData(true);
     } catch (err) {
       console.error(`Failed to ${actionLabel} user:`, err);
-      toast.error(`Error trying to ${actionLabel} user. Please try again.`);
+      toast.error(`Error trying to ${actionLabel} user: ${err?.response?.data?.detail || err.message || 'Please try again'}`);
     } finally {
       setTogglingId(null);
     }
@@ -172,7 +169,9 @@ const Admin = () => {
     }
 
     try {
-      await adminService.deleteUser(userId).catch(() => {});
+      const isTempId = userId && (userId.startsWith('req_') || userId.startsWith('req-'));
+      const targetIdentifier = (!isTempId) ? userId : (username || email);
+      await adminService.deleteUser(targetIdentifier).catch(() => {});
       
       // Clear from local registries
       try {

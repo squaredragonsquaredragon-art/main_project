@@ -15,6 +15,7 @@ import AdminRoute from './AdminRoute';
 const Login = lazy(() => import('../pages/auth/Login'));
 const Register = lazy(() => import('../pages/auth/Register'));
 const ForgotPassword = lazy(() => import('../pages/auth/ForgotPassword'));
+const ForgotUsername = lazy(() => import('../pages/auth/ForgotUsername'));
 const SuspiciousLogin = lazy(() => import('../pages/auth/SuspiciousLogin'));
 const BootSelector = lazy(() => import('../pages/auth/BootSelector'));
 
@@ -57,6 +58,7 @@ const Privacy = lazy(() => import('../pages/profile/Privacy'));
 // Admin — lazy loaded (heavy, rarely used)
 const AdminDashboard = lazy(() => import('../pages/admin/Dashboard'));
 const AdminUsers = lazy(() => import('../pages/admin/Users'));
+const AdminAIChat = lazy(() => import('../pages/admin/AIChat'));
 const AIThreatAnalysis = lazy(() => import('../pages/admin/AIThreatAnalysis'));
 const AttackLogs = lazy(() => import('../pages/admin/AttackLogs'));
 const BlockedIPs = lazy(() => import('../pages/admin/BlockedIPs'));
@@ -96,6 +98,7 @@ const AppRoutes = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/forgot-username" element={<ForgotUsername />} />
           <Route path="/suspicious-login" element={<SuspiciousLogin />} />
         </Route>
       </Route>
@@ -144,6 +147,7 @@ const AppRoutes = () => {
       <Route element={<AdminRoute />}>
         <Route element={<AdminLayout />}>
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/ai-chat" element={<AdminAIChat />} />
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/threats" element={<AIThreatAnalysis />} />
           <Route path="/admin/alerts" element={<AttackLogs />} />

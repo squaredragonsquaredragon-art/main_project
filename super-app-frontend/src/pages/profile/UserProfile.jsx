@@ -320,6 +320,7 @@ const UserProfile = () => {
         </h3>
         
         {[
+          { to: '/profile/security', label: '🛡️ Linked Devices & Safe Account', desc: 'Check devices linked with account, trigger Safe Account to log out all devices' },
           { to: '/profile/security', label: 'Security & Access Keys', desc: 'Change security passwords, audit certificates' },
           { to: '/profile/privacy', label: 'Privacy & Quarantine Settings', desc: 'Modify anonymous blocks, firewall details' },
           { to: '/profile/settings', label: 'Terminal Configurations', desc: 'Aesthetic styles overrides, sounds' }

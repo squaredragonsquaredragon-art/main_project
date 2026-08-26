@@ -16,6 +16,7 @@ const Profile = lazy(() => import('../pages/Profile'));
 const UserTrack = lazy(() => import('../pages/UserTrack'));
 const Reports = lazy(() => import('../pages/Reports'));
 const SupportChat = lazy(() => import('../pages/SupportChat'));
+const AIChat = lazy(() => import('../pages/AIChat'));
 const NotFound = lazy(() => import('../pages/NotFound'));
 
 const PageFallback = () => (
@@ -52,6 +53,7 @@ const AppRoutes = () => (
         <Route path="/user-track" element={<UserTrack />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/support-chat" element={<SupportChat />} />
+        <Route path="/ai-chat" element={<AIChat />} />
       </Route>
     </Route>
 

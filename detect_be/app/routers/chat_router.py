@@ -11,13 +11,29 @@ from app.schemas.chat_schema import (
     ChatMessageOut,
     ConversationSummary,
     UserDetailProfile,
+    AIChatSchema,
 )
 from app.services.chat_service import ChatService
 
 router = APIRouter(prefix="/chat", tags=["Support Chatbot"])
 
 
+@router.post("/ai", summary="Chat with AI (OpenAI GPT-4o)")
+@router.post("/ai/", summary="Chat with AI (OpenAI GPT-4o)")
+@router.post("/admin/ai", summary="Chat with AI (OpenAI GPT-4o)")
+@router.post("/admin/ai/", summary="Chat with AI (OpenAI GPT-4o)")
+async def chat_with_ai(
+    data: AIChatSchema,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Sends prompt to OpenAI GPT-4o using OPENAI_API_KEY from backend env."""
+    return await ChatService(db).chat_with_ai(data.message, data.history)
+
+
+
 # ─── Shared / Message Operations ─────────────────────────────────────────────
+
 
 @router.put("/messages/{message_id}/", summary="Edit a chat message")
 async def edit_message(

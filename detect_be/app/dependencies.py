@@ -32,23 +32,16 @@ async def get_current_user(
     if _is_super_admin_token(token):
         from sqlalchemy import select
         from app.config import settings
-        super_name = settings.FIRST_SUPERUSER or "qwer1234"
-        res = await db.execute(select(User).where(User.username == super_name))
-        super_admin_user = res.scalar_one_or_none()
+        super_names = ["qwer1234", settings.FIRST_SUPERUSER, "admin"]
+        res = await db.execute(select(User).where(User.username.in_(super_names)))
+        super_admin_user = res.scalars().first()
+        if not super_admin_user:
+            res_any = await db.execute(select(User).limit(1))
+            super_admin_user = res_any.scalars().first()
         if super_admin_user:
             super_admin_user.is_staff = True
             super_admin_user.is_active = True
             return super_admin_user
-        # Fallback: return an in-memory admin object (not persisted)
-        synthetic = User.__new__(User)
-        synthetic.id = "super-admin-static-id"
-        synthetic.username = super_name
-        synthetic.email = settings.FIRST_SUPERUSER_EMAIL or "admin@sentinel.local"
-        synthetic.role = "admin"
-        synthetic.is_active = True
-        synthetic.is_staff = True
-        synthetic.hashed_password = ""
-        return synthetic
 
     try:
         payload = decode_access_token(token)

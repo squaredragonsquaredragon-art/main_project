@@ -1,1 +1,0 @@
-import{s as r}from"./index-fl5_0ydH.js";import e from"./ReelFeed-DPwpy3At.js";import"./Loader-DRKdN-mk.js";import"./plus-CVkm6urj.js";import"./heart-Cxkgpi5Y.js";const p=()=>r.jsx(e,{});export{p as default};

@@ -11,3 +11,11 @@ export const validatePassword = (password) => {
 export const validateUsername = (username) => {
   return username && username.trim().length >= 3;
 };
+
+export const validatePhoneNumber = (phone) => {
+  if (!phone || !String(phone).trim()) return false;
+  const cleaned = String(phone).replace(/[\s\-\(\)]/g, '');
+  const re = /^(\+?\d{10,15})$/;
+  return re.test(cleaned);
+};
+
