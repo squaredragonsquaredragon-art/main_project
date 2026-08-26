@@ -21,30 +21,36 @@ const ForgotPassword = () => {
     setActiveApp(app);
   }, []);
 
-  // Step 1: Transmit OTP reset passcode
-  const handleRequestPasscode = (e) => {
+  // Step 1: Request 6-digit OTP to user email
+  const handleRequestPasscode = async (e) => {
     e.preventDefault();
-    if (!identifier.trim()) {
+    if (!identifier || !identifier.trim()) {
       addToast('Please enter your registered username or email.', 'warning');
       return;
     }
     setLoading(true);
+    setOtpCode('');
 
-    // Generate a random 6-digit security code
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedPasscode(code);
-    setOtpCode(code); // pre-fill for user convenience
-
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const res = await authApi.requestPasswordResetOtp(identifier.trim(), activeApp);
+      setGeneratedPasscode(res.otp_code || '');
       setStep(2);
-      addToast(`Reset passcode generated: [${code}]. Security clearance granted!`, 'info');
-    }, 800);
+      addToast(res.message || 'Security OTP sent to your registered email! Please check your inbox.', 'success');
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || err.message || 'No account found matching given username or email.';
+      addToast(errorMsg, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Step 2: Reset password and trigger back office alert
+  // Step 2: Verify OTP and reset password
   const handleResetPassword = async (e) => {
     e.preventDefault();
+    if (!otpCode || !otpCode.trim()) {
+      addToast('Security OTP verification code is mandatory.', 'warning');
+      return;
+    }
     if (!newPassword || newPassword.length < 8) {
       addToast('New password must be at least 8 characters long.', 'warning');
       return;
@@ -60,7 +66,7 @@ const ForgotPassword = () => {
         {
           username_or_email: identifier.trim(),
           new_password: newPassword,
-          otp_code: otpCode,
+          otp_code: otpCode.trim(),
         },
         activeApp
       );
@@ -70,7 +76,7 @@ const ForgotPassword = () => {
         navigate('/login', { state: { prefilledUsername: identifier } });
       }, 1000);
     } catch (err) {
-      const msg = err.response?.data?.detail || 'Failed to update security credentials. Please check details.';
+      const msg = err.response?.data?.detail || 'Failed to update security credentials. Invalid or expired OTP.';
       addToast(msg, 'error');
     } finally {
       setLoading(false);

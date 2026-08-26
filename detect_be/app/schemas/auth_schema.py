@@ -75,10 +75,14 @@ class ForgotUsernameSchema(BaseModel):
     email: EmailStr
 
 
+class ForgotPasswordRequestSchema(BaseModel):
+    username_or_email: str
+
+
 class ForgotPasswordSchema(BaseModel):
     username_or_email: str
     new_password: str
-    otp_code: str = "123456"
+    otp_code: str
 
     @field_validator("new_password")
     @classmethod

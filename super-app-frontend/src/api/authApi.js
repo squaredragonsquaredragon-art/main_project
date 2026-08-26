@@ -73,6 +73,11 @@ export const authApi = {
     return response.data;
   },
 
+  requestPasswordResetOtp: async (usernameOrEmail, app = 'all') => {
+    const response = await api.post(`/auth/forgot-password/request-otp/?app=${app}`, { username_or_email: usernameOrEmail });
+    return response.data;
+  },
+
   forgotPassword: async (payload, app = 'all') => {
     const response = await api.post(`/auth/forgot-password/?app=${app}`, payload);
     return response.data;
