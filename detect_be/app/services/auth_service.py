@@ -984,15 +984,24 @@ class AuthService:
             target_phone = getattr(app_user, "phone_number", None)
 
         if not target_email:
-            user = await self.user_repo.get_by_username_or_email(identifier)
+            res = await self.db.execute(
+                select(User).where(
+                    or_(
+                        User.username == identifier,
+                        User.email == identifier,
+                        User.phone_number == identifier,
+                        User.phone_number.endswith(identifier)
+                    )
+                )
+            )
+            user = res.scalars().first()
             if user:
                 target_username = user.username
                 target_email = user.email
-                if not target_phone and hasattr(user, "phone_number"):
-                    target_phone = getattr(user, "phone_number", None)
+                target_phone = user.phone_number
 
-        if not target_email:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "No account found matching that username or email.")
+        if not target_email and not target_phone:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No account found matching that phone number, username, or email.")
 
         import random, time
         otp_code = str(random.randint(100000, 999999))

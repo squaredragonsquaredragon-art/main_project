@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useNotification } from '../../context/NotificationContext';
 import { authApi } from '../../api/authApi';
-import { Mail, ArrowLeft, Send, Lock, KeyRound, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { Mail, ArrowLeft, Send, Lock, KeyRound, ShieldAlert, CheckCircle2, Phone, MessageSquare } from 'lucide-react';
 
 const ForgotPassword = () => {
   const [identifier, setIdentifier] = useState('');
@@ -21,11 +21,11 @@ const ForgotPassword = () => {
     setActiveApp(app);
   }, []);
 
-  // Step 1: Request 6-digit OTP to user email
+  // Step 1: Request 6-digit OTP to user WhatsApp / Phone number
   const handleRequestPasscode = async (e) => {
     e.preventDefault();
     if (!identifier || !identifier.trim()) {
-      addToast('Please enter your registered username or email.', 'warning');
+      addToast('Please enter your registered phone number, username, or email.', 'warning');
       return;
     }
     setLoading(true);
@@ -35,9 +35,9 @@ const ForgotPassword = () => {
       const res = await authApi.requestPasswordResetOtp(identifier.trim(), activeApp);
       setGeneratedPasscode(res.otp_code || '');
       setStep(2);
-      addToast(res.message || 'Security OTP sent to your registered email! Please check your inbox.', 'success');
+      addToast(res.message || 'Security OTP sent to your registered WhatsApp number! Please check your messages.', 'success');
     } catch (err) {
-      const errorMsg = err.response?.data?.detail || err.message || 'No account found matching given username or email.';
+      const errorMsg = err.response?.data?.detail || err.message || 'No account found matching given phone number, username, or email.';
       addToast(errorMsg, 'error');
     } finally {
       setLoading(false);
@@ -122,30 +122,30 @@ const ForgotPassword = () => {
             width: '42px',
             height: '42px',
             borderRadius: '12px',
-            background: 'rgba(244, 63, 94, 0.15)',
-            border: '1px solid rgba(244, 63, 94, 0.35)',
+            background: 'rgba(16, 185, 129, 0.15)',
+            border: '1px solid rgba(16, 185, 129, 0.35)',
             marginBottom: '8px',
-            boxShadow: '0 0 20px rgba(244, 63, 94, 0.25)',
+            boxShadow: '0 0 20px rgba(16, 185, 129, 0.25)',
           }}
         >
-          <KeyRound size={22} color="#f43f5e" />
+          <MessageSquare size={22} color="#10b981" />
         </div>
         <h2 style={{ fontSize: '20px', fontWeight: 800, margin: 0, letterSpacing: '-0.02em', color: '#f8fafc' }}>
           Reset Password
         </h2>
         <p style={{ color: '#94a3b8', fontSize: '12px', marginTop: '3px', marginBottom: 0 }}>
           {step === 1
-            ? 'Enter your account username or email to generate a security passcode.'
-            : 'Enter your reset passcode and your new password.'}
+            ? 'Enter your registered Phone Number or Username to receive a 6-digit WhatsApp Security OTP.'
+            : 'Enter the 6-digit OTP code received on WhatsApp and create your new password.'}
         </p>
       </div>
 
       {step === 1 ? (
-        /* STEP 1: Enter Username or Email */
+        /* STEP 1: Enter Phone Number or Username */
         <form onSubmit={handleRequestPasscode} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '11px', fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Username or Registered Email
+              REGISTERED PHONE / WHATSAPP NUMBER <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <div style={{ position: 'relative' }}>
               <input
@@ -153,7 +153,7 @@ const ForgotPassword = () => {
                 className="glass-input"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="Enter username or email..."
+                placeholder="Enter phone number (e.g. +919876543210 or 9876543210)..."
                 style={{
                   paddingLeft: '38px',
                   height: '40px',
@@ -168,9 +168,9 @@ const ForgotPassword = () => {
                 disabled={loading}
                 required
               />
-              <Mail
+              <Phone
                 size={15}
-                color="#64748b"
+                color="#10b981"
                 style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}
               />
             </div>
@@ -183,13 +183,13 @@ const ForgotPassword = () => {
               height: '42px',
               marginTop: '4px',
               borderRadius: '8px',
-              background: 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)',
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
               border: 'none',
               color: '#fff',
               fontWeight: 700,
               fontSize: '13px',
               cursor: loading ? 'not-allowed' : 'pointer',
-              boxShadow: '0 0 20px rgba(244, 63, 94, 0.25)',
+              boxShadow: '0 0 20px rgba(16, 185, 129, 0.25)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -198,13 +198,13 @@ const ForgotPassword = () => {
             }}
             disabled={loading}
           >
-            <Send size={15} />
-            {loading ? 'Transmitting Key...' : 'Request Reset Passcode'}
+            <MessageSquare size={15} />
+            {loading ? 'Sending WhatsApp OTP...' : 'Send WhatsApp Security OTP 📲'}
           </button>
 
           <div style={{ textAlign: 'center', marginTop: '6px', fontSize: '12px', color: '#94a3b8' }}>
             Remembered your password?{' '}
-            <Link to="/login" style={{ color: '#f43f5e', fontWeight: 700, textDecoration: 'none' }}>
+            <Link to="/login" style={{ color: '#10b981', fontWeight: 700, textDecoration: 'none' }}>
               Sign In
             </Link>
           </div>
@@ -212,29 +212,29 @@ const ForgotPassword = () => {
       ) : (
         /* STEP 2: Verification & New Password */
         <form onSubmit={handleResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {/* Demo Banner showing generated passcode */}
+          {/* Banner */}
           <div
             style={{
-              background: 'rgba(56, 189, 248, 0.08)',
-              border: '1px solid rgba(56, 189, 248, 0.25)',
+              background: 'rgba(16, 185, 129, 0.08)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
               borderRadius: '8px',
               padding: '10px 12px',
               display: 'flex',
               alignItems: 'center',
               gap: '10px',
               fontSize: '12px',
-              color: '#38bdf8',
+              color: '#34d399',
             }}
           >
             <CheckCircle2 size={16} />
             <div>
-              Passcode transmitted for <strong>{identifier}</strong>: <code style={{ color: '#fff', fontWeight: 700 }}>{generatedPasscode}</code>
+              WhatsApp OTP transmitted for <strong>{identifier}</strong>. Enter the 6-digit code received on WhatsApp to create your new password.
             </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '11px', fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Security OTP Passcode
+              6-DIGIT WHATSAPP OTP CODE <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <div style={{ position: 'relative' }}>
               <input
@@ -242,7 +242,7 @@ const ForgotPassword = () => {
                 className="glass-input"
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value)}
-                placeholder="6-digit passcode"
+                placeholder="Enter 6-digit OTP code..."
                 style={{
                   paddingLeft: '38px',
                   height: '40px',
@@ -259,7 +259,7 @@ const ForgotPassword = () => {
               />
               <KeyRound
                 size={15}
-                color="#64748b"
+                color="#10b981"
                 style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}
               />
             </div>
@@ -267,7 +267,7 @@ const ForgotPassword = () => {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '11px', fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              New Password
+              NEW PASSWORD <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <div style={{ position: 'relative' }}>
               <input
@@ -275,7 +275,7 @@ const ForgotPassword = () => {
                 className="glass-input"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="At least 8 characters"
+                placeholder="At least 8 characters..."
                 style={{
                   paddingLeft: '38px',
                   height: '40px',
@@ -300,7 +300,7 @@ const ForgotPassword = () => {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '11px', fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Confirm New Password
+              CONFIRM NEW PASSWORD <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <div style={{ position: 'relative' }}>
               <input
@@ -308,7 +308,7 @@ const ForgotPassword = () => {
                 className="glass-input"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter password"
+                placeholder="Re-enter new password..."
                 style={{
                   paddingLeft: '38px',
                   height: '40px',
@@ -338,13 +338,13 @@ const ForgotPassword = () => {
               height: '42px',
               marginTop: '6px',
               borderRadius: '8px',
-              background: 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)',
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
               border: 'none',
               color: '#fff',
               fontWeight: 700,
               fontSize: '13px',
               cursor: loading ? 'not-allowed' : 'pointer',
-              boxShadow: '0 0 20px rgba(244, 63, 94, 0.25)',
+              boxShadow: '0 0 20px rgba(16, 185, 129, 0.25)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -354,7 +354,7 @@ const ForgotPassword = () => {
             disabled={loading}
           >
             <ShieldAlert size={16} />
-            {loading ? 'Updating Credentials...' : 'Save New Password & Notify Back Office'}
+            {loading ? 'Updating Password...' : 'Verify OTP & Save New Password 🛡️'}
           </button>
 
           <button
@@ -369,7 +369,7 @@ const ForgotPassword = () => {
               marginTop: '4px',
             }}
           >
-            Change username or email
+            Change phone number or username
           </button>
         </form>
       )}
