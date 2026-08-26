@@ -12,8 +12,18 @@ export const authApi = {
   },
 
   verifyCredentials: async (credentials, app = 'all') => {
-    const response = await api.post(`/auth/verify-credentials/?app=${app}`, credentials);
-    return response.data;
+    try {
+      const response = await api.post(`/auth/verify-credentials/?app=${app}`, credentials);
+      return response.data;
+    } catch (err) {
+      if (err.response) throw err;
+      try {
+        const response2 = await api.post(`/auth/verify-credentials?app=${app}`, credentials);
+        return response2.data;
+      } catch (err2) {
+        throw err;
+      }
+    }
   },
 
   logout: async (refreshToken) => {
