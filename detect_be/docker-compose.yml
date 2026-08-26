@@ -45,10 +45,11 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=postgresql+asyncpg://sentinel:sentinel123@db:5432/sentineldb
       - SYNC_DATABASE_URL=postgresql+psycopg2://sentinel:sentinel123@db:5432/sentineldb
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
     depends_on:
       db:
         condition: service_healthy
