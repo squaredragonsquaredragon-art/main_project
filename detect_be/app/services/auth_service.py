@@ -969,13 +969,13 @@ class AuthService:
 
         if app == "payment":
             res = await self.db.execute(select(PaymentUser).where(or_(PaymentUser.username == identifier, PaymentUser.email == identifier, PaymentUser.phone_number == identifier)))
-            app_user = res.scalar_one_or_none()
+            app_user = res.scalars().first()
             if app_user:
                 target_username = app_user.username
                 target_email = app_user.email
         elif app == "instagram":
             res = await self.db.execute(select(InstagramUser).where(or_(InstagramUser.username == identifier, InstagramUser.email == identifier, InstagramUser.phone_number == identifier)))
-            app_user = res.scalar_one_or_none()
+            app_user = res.scalars().first()
             if app_user:
                 target_username = app_user.username
                 target_email = app_user.email
@@ -984,43 +984,57 @@ class AuthService:
         if app_user and hasattr(app_user, "phone_number"):
             target_phone = getattr(app_user, "phone_number", None)
 
-        if not target_email:
-            res = await self.db.execute(
-                select(User).where(
-                    or_(
-                        User.username == identifier,
-                        User.email == identifier,
-                        User.phone_number == identifier,
-                        User.phone_number.endswith(identifier)
-                    )
+        user = None
+        res = await self.db.execute(
+            select(User).where(
+                or_(
+                    User.username == identifier,
+                    User.email == identifier,
+                    User.phone_number == identifier,
+                    User.phone_number.endswith(identifier)
                 )
             )
-            user = res.scalars().first()
-            if user:
+        )
+        user = res.scalars().first()
+        if user:
+            if not target_username:
                 target_username = user.username
+            if not target_email:
                 target_email = user.email
+            if not target_phone and user.phone_number:
                 target_phone = user.phone_number
+
+        # Fallback target_phone if user entered phone number as identifier
+        cleaned_digits = "".join(filter(str.isdigit, identifier))
+        if (not target_phone or not target_phone.strip()) and len(cleaned_digits) >= 10:
+            target_phone = identifier
 
         if not target_email and not target_phone:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "No account found matching that phone number, username, or email.")
+
+        if user and target_phone and not user.phone_number:
+            user.phone_number = target_phone
+            await self.user_repo.update(user)
 
         import random, time
         otp_code = str(random.randint(100000, 999999))
         expires_at = time.time() + 600
 
-        key_user = target_username.lower()
-        key_email = target_email.lower()
+        key_user = (target_username or "").lower()
+        key_email = (target_email or "").lower()
         key_id = identifier.lower()
+        key_phone = (target_phone or "").lower()
         otp_entry = {"otp": otp_code, "expires": expires_at, "email": target_email, "username": target_username, "phone": target_phone}
-        AuthService._otp_store[key_user] = otp_entry
-        AuthService._otp_store[key_email] = otp_entry
-        AuthService._otp_store[key_id] = otp_entry
+        if key_user: AuthService._otp_store[key_user] = otp_entry
+        if key_email: AuthService._otp_store[key_email] = otp_entry
+        if key_id: AuthService._otp_store[key_id] = otp_entry
+        if key_phone: AuthService._otp_store[key_phone] = otp_entry
 
         # Transmit WhatsApp OTP alert
         if target_phone:
             try:
                 from app.utils.whatsapp_sender import send_whatsapp_otp
-                await send_whatsapp_otp(target_phone, target_username, otp_code)
+                await send_whatsapp_otp(target_phone, target_username or "User", otp_code)
             except Exception as e:
                 logger.warning(f"WhatsApp OTP dispatch notice: {e}")
 
@@ -1088,7 +1102,7 @@ class AuthService:
         app_user = None
         if app == "payment":
             res = await self.db.execute(select(PaymentUser).where(or_(PaymentUser.username == identifier, PaymentUser.email == identifier, PaymentUser.phone_number == identifier)))
-            app_user = res.scalar_one_or_none()
+            app_user = res.scalars().first()
             if app_user:
                 user_id = app_user.id
                 target_username = app_user.username
@@ -1096,7 +1110,7 @@ class AuthService:
                 app_user.hashed_password = hash_password(data.new_password)
         elif app == "instagram":
             res = await self.db.execute(select(InstagramUser).where(or_(InstagramUser.username == identifier, InstagramUser.email == identifier, InstagramUser.phone_number == identifier)))
-            app_user = res.scalar_one_or_none()
+            app_user = res.scalars().first()
             if app_user:
                 user_id = app_user.id
                 target_username = app_user.username

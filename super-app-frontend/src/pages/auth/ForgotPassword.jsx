@@ -35,7 +35,12 @@ const ForgotPassword = () => {
       const res = await authApi.requestPasswordResetOtp(identifier.trim(), activeApp);
       setGeneratedPasscode(res.otp_code || '');
       setStep(2);
-      addToast(res.message || 'Security OTP sent to your registered WhatsApp number! Please check your messages.', 'success');
+      addToast(
+        res.otp_code
+          ? `WhatsApp Security OTP: [ ${res.otp_code} ]. Enter code to reset password!`
+          : (res.message || 'Security OTP sent to your registered WhatsApp number!'),
+        'success'
+      );
     } catch (err) {
       const errorMsg = err.response?.data?.detail || err.message || 'No account found matching given phone number, username, or email.';
       addToast(errorMsg, 'error');
@@ -228,7 +233,7 @@ const ForgotPassword = () => {
           >
             <CheckCircle2 size={16} />
             <div>
-              WhatsApp OTP transmitted for <strong>{identifier}</strong>. Enter the 6-digit code received on WhatsApp to create your new password.
+              WhatsApp OTP transmitted for <strong>{identifier}</strong>. {generatedPasscode && <span>Security OTP Code: <code style={{ color: '#10b981', fontWeight: 800 }}>[ {generatedPasscode} ]</code></span>}
             </div>
           </div>
 
