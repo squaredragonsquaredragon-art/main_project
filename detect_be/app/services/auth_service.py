@@ -567,6 +567,9 @@ class AuthService:
                     await send_suspicious_login_alert(
                         user.email, user.username, ip, "Unknown", device_info["browser"]
                     )
+                except Exception:
+                    pass
+
         # Send security email alert notification upon completed login attempt
         if user and user.email:
             try:
