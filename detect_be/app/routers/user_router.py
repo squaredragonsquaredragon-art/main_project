@@ -45,3 +45,16 @@ async def user_safe_account_logout_all(
     from app.services.auth_service import AuthService
     return await AuthService(db).safe_account_logout_all(current_user, None)
 
+
+@router.post("/verify-credentials/", summary="Verify credentials alias in user router")
+@router.post("/verify-credentials", summary="Verify credentials alias in user router")
+async def user_verify_credentials(
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    from app.schemas.auth_schema import LoginSchema
+    from app.services.auth_service import AuthService
+    login_data = LoginSchema(username=data.get("username", ""), password=data.get("password", ""))
+    return await AuthService(db).verify_credentials(login_data, None, "all")
+
+
