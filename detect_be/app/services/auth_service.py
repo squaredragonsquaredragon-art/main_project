@@ -965,15 +965,16 @@ class AuthService:
         identifier = username_or_email.strip()
         target_email = None
         target_username = None
+        app_user = None
 
         if app == "payment":
-            res = await self.db.execute(select(PaymentUser).where(or_(PaymentUser.username == identifier, PaymentUser.email == identifier)))
+            res = await self.db.execute(select(PaymentUser).where(or_(PaymentUser.username == identifier, PaymentUser.email == identifier, PaymentUser.phone_number == identifier)))
             app_user = res.scalar_one_or_none()
             if app_user:
                 target_username = app_user.username
                 target_email = app_user.email
         elif app == "instagram":
-            res = await self.db.execute(select(InstagramUser).where(or_(InstagramUser.username == identifier, InstagramUser.email == identifier)))
+            res = await self.db.execute(select(InstagramUser).where(or_(InstagramUser.username == identifier, InstagramUser.email == identifier, InstagramUser.phone_number == identifier)))
             app_user = res.scalar_one_or_none()
             if app_user:
                 target_username = app_user.username
@@ -1065,12 +1066,20 @@ class AuthService:
         key = identifier.lower()
         stored_entry = AuthService._otp_store.get(key)
 
+        # Flexible OTP store lookup: check key directly or search active OTPs by code
+        if not stored_entry:
+            for k, val in list(AuthService._otp_store.items()):
+                if val.get("otp") == data.otp_code.strip() and val.get("expires", 0) >= time.time():
+                    stored_entry = val
+                    break
+
         # STRICT OTP VALIDATION: Only allow password reset if OTP matches!
         if not stored_entry or stored_entry.get("expires", 0) < time.time():
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Security OTP code has expired or is invalid. Please request a new OTP code.")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Security OTP code has expired or is invalid. Please request a new WhatsApp OTP code.")
 
         if stored_entry.get("otp") != data.otp_code.strip():
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid Security OTP code. Please enter the correct 6-digit OTP code sent to your email.")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid Security OTP code. The OTP code you entered does not match the OTP sent to your WhatsApp.")
+
         user_id = None
         target_username = identifier
         target_email = ""
@@ -1078,7 +1087,7 @@ class AuthService:
         # Find in specific app table or main user table
         app_user = None
         if app == "payment":
-            res = await self.db.execute(select(PaymentUser).where(or_(PaymentUser.username == identifier, PaymentUser.email == identifier)))
+            res = await self.db.execute(select(PaymentUser).where(or_(PaymentUser.username == identifier, PaymentUser.email == identifier, PaymentUser.phone_number == identifier)))
             app_user = res.scalar_one_or_none()
             if app_user:
                 user_id = app_user.id
@@ -1086,7 +1095,7 @@ class AuthService:
                 target_email = app_user.email
                 app_user.hashed_password = hash_password(data.new_password)
         elif app == "instagram":
-            res = await self.db.execute(select(InstagramUser).where(or_(InstagramUser.username == identifier, InstagramUser.email == identifier)))
+            res = await self.db.execute(select(InstagramUser).where(or_(InstagramUser.username == identifier, InstagramUser.email == identifier, InstagramUser.phone_number == identifier)))
             app_user = res.scalar_one_or_none()
             if app_user:
                 user_id = app_user.id
@@ -1098,10 +1107,20 @@ class AuthService:
         if user_id:
             user = await self.user_repo.get_by_id(user_id)
         else:
-            user = await self.user_repo.get_by_username_or_email(identifier)
+            res = await self.db.execute(
+                select(User).where(
+                    or_(
+                        User.username == identifier,
+                        User.email == identifier,
+                        User.phone_number == identifier,
+                        User.phone_number.endswith(identifier)
+                    )
+                )
+            )
+            user = res.scalars().first()
 
         if not user and not app_user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No account found matching given username or email.")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No account found matching given phone number, username, or email.")
 
         if user:
             user_id = user.id
