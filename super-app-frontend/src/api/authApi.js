@@ -68,8 +68,11 @@ export const authApi = {
     return response.data;
   },
 
-  forgotUsername: async (email, app = 'all') => {
-    const response = await api.post(`/auth/forgot-username/?app=${app}`, { email });
+  forgotUsername: async (emailOrPhone, otpCode = '', app = 'all') => {
+    const payload = typeof emailOrPhone === 'object'
+      ? emailOrPhone
+      : { email_or_phone: emailOrPhone, otp_code: otpCode };
+    const response = await api.post(`/auth/forgot-username/?app=${app}`, payload);
     return response.data;
   },
 

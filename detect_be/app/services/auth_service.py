@@ -915,47 +915,70 @@ class AuthService:
             return request.client.host
         return "0.0.0.0"
 
-    async def forgot_username(self, email: str, app: str = "all") -> dict:
+    async def forgot_username(self, data: ForgotUsernameSchema, app: str = "all") -> dict:
+        import time
         from app.models.app_users import PaymentUser, InstagramUser
-        from sqlalchemy import select
+        from sqlalchemy import select, or_
+
+        identifier = data.email_or_phone.strip()
+        key = identifier.lower()
+
+        # If otp_code is provided, strictly verify OTP before revealing username
+        if data.otp_code:
+            stored_entry = AuthService._otp_store.get(key)
+            if not stored_entry:
+                for k, val in list(AuthService._otp_store.items()):
+                    if val.get("otp") == data.otp_code.strip() and val.get("expires", 0) >= time.time():
+                        stored_entry = val
+                        break
+
+            if not stored_entry or stored_entry.get("expires", 0) < time.time():
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Security OTP code has expired or is invalid. Please request a new WhatsApp OTP code.")
+
+            if stored_entry.get("otp") != data.otp_code.strip():
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid Security OTP code. The OTP code you entered does not match the OTP sent to your WhatsApp.")
 
         username = None
+        target_email = ""
+
+        # Lookup in PaymentUser, InstagramUser, or main User
         if app == "payment":
-            res = await self.db.execute(select(PaymentUser.username).where(PaymentUser.email == email))
-            username = res.scalar_one_or_none()
+            res = await self.db.execute(select(PaymentUser).where(or_(PaymentUser.email == identifier, PaymentUser.phone_number == identifier, PaymentUser.username == identifier)))
+            u_p = res.scalars().first()
+            if u_p:
+                username = u_p.username
+                target_email = u_p.email
         elif app == "instagram":
-            res = await self.db.execute(select(InstagramUser.username).where(InstagramUser.email == email))
-            username = res.scalar_one_or_none()
-        else:
-            user = await self.user_repo.get_by_email(email)
+            res = await self.db.execute(select(InstagramUser).where(or_(InstagramUser.email == identifier, InstagramUser.phone_number == identifier, InstagramUser.username == identifier)))
+            u_i = res.scalars().first()
+            if u_i:
+                username = u_i.username
+                target_email = u_i.email
+
+        if not username:
+            res = await self.db.execute(
+                select(User).where(
+                    or_(
+                        User.username == identifier,
+                        User.email == identifier,
+                        User.phone_number == identifier,
+                        User.phone_number.endswith(identifier)
+                    )
+                )
+            )
+            user = res.scalars().first()
             if user:
                 username = user.username
-                if app != "all" and username.startswith(f"{app}_"):
-                    username = username[len(app) + 1:]
+                target_email = user.email
 
         if not username:
-            # Fallback search across all tables
-            res_p = await self.db.execute(select(PaymentUser.username).where(PaymentUser.email == email))
-            u_p = res_p.scalar_one_or_none()
-            if u_p:
-                username = u_p
-            else:
-                res_i = await self.db.execute(select(InstagramUser.username).where(InstagramUser.email == email))
-                u_i = res_i.scalar_one_or_none()
-                if u_i:
-                    username = u_i
-                else:
-                    user_std = await self.user_repo.get_by_email(email)
-                    if user_std:
-                        username = user_std.username
-
-        if not username:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No account registered with this email address.")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No registered account found matching that phone number or email address.")
 
         return {
+            "success": True,
             "detail": "Account located successfully.",
             "username": username,
-            "email": email
+            "email": target_email or identifier
         }
 
     async def request_reset_otp(self, username_or_email: str, app: str = "all") -> dict:
