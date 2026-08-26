@@ -89,7 +89,7 @@ async def forgot_username(
     app: str = Query("all") if "Query" in globals() else "all",
     db: AsyncSession = Depends(get_db),
 ):
-    return await AuthService(db).forgot_username(data.email, app)
+    return await AuthService(db).forgot_username(data, app)
 
 
 @router.post("/forgot-password/request-otp/", summary="Request 6-digit Security OTP for password reset")

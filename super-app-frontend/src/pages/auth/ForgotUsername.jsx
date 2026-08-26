@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useNotification } from '../../context/NotificationContext';
 import { authApi } from '../../api/authApi';
-import { Mail, ArrowLeft, Search, UserCheck, Copy, Check } from 'lucide-react';
+import { Phone, ArrowLeft, Search, UserCheck, Copy, Check, KeyRound, MessageSquare, CheckCircle2 } from 'lucide-react';
 
 const ForgotUsername = () => {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
+  const [step, setStep] = useState(1); // 1: Send WhatsApp OTP, 2: Verify OTP & Reveal
+  const [otpCode, setOtpCode] = useState('');
+  const [generatedPasscode, setGeneratedPasscode] = useState('');
   const [loading, setLoading] = useState(false);
   const [recoveredUser, setRecoveredUser] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -18,19 +21,49 @@ const ForgotUsername = () => {
     setActiveApp(app);
   }, []);
 
-  const handleRecover = async (e) => {
+  // Step 1: Request 6-digit WhatsApp OTP
+  const handleRequestOtp = async (e) => {
     e.preventDefault();
-    if (!email || !email.trim()) {
-      addToast('Please enter your registered email address.', 'warning');
+    if (!identifier || !identifier.trim()) {
+      addToast('Please enter your registered phone number or email.', 'warning');
       return;
     }
     setLoading(true);
+    setOtpCode('');
+
     try {
-      const data = await authApi.forgotUsername(email.trim(), activeApp);
-      setRecoveredUser(data.username);
-      addToast('Account matched! Username located.', 'success');
+      const res = await authApi.requestPasswordResetOtp(identifier.trim(), activeApp);
+      setGeneratedPasscode(res.otp_code || '');
+      setStep(2);
+      addToast(
+        res.otp_code
+          ? `WhatsApp Security OTP: [ ${res.otp_code} ]. Enter code below to locate username!`
+          : (res.message || 'Security OTP sent to your registered WhatsApp number!'),
+        'success'
+      );
     } catch (err) {
-      const msg = err.response?.data?.detail || 'No registered account found matching that email address.';
+      const errorMsg = err.response?.data?.detail || err.message || 'No registered account found matching given phone number or email.';
+      addToast(errorMsg, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 2: Verify OTP and reveal Username
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    if (!otpCode || !otpCode.trim()) {
+      addToast('Security OTP verification code is mandatory.', 'warning');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await authApi.forgotUsername(identifier.trim(), otpCode.trim(), activeApp);
+      setRecoveredUser(data.username);
+      addToast('Account matched! Username verified & located.', 'success');
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Invalid or expired WhatsApp Security OTP code.';
       addToast(msg, 'error');
     } finally {
       setLoading(false);
@@ -85,19 +118,21 @@ const ForgotUsername = () => {
             width: '42px',
             height: '42px',
             borderRadius: '12px',
-            background: 'rgba(56, 189, 248, 0.15)',
-            border: '1px solid rgba(56, 189, 248, 0.35)',
+            background: 'rgba(16, 185, 129, 0.15)',
+            border: '1px solid rgba(16, 185, 129, 0.35)',
             marginBottom: '8px',
-            boxShadow: '0 0 20px rgba(56, 189, 248, 0.25)',
+            boxShadow: '0 0 20px rgba(16, 185, 129, 0.25)',
           }}
         >
-          <UserCheck size={22} color="#38bdf8" />
+          <MessageSquare size={22} color="#10b981" />
         </div>
         <h2 style={{ fontSize: '20px', fontWeight: 800, margin: 0, letterSpacing: '-0.02em', color: '#f8fafc' }}>
-          Recover Username
+          Forgot Username
         </h2>
         <p style={{ color: '#94a3b8', fontSize: '12px', marginTop: '3px', marginBottom: 0 }}>
-          Enter your registered node email address to locate your handle.
+          {step === 1
+            ? 'Enter your registered Phone Number or Email to receive a 6-digit WhatsApp Security OTP.'
+            : 'Enter the 6-digit OTP code received on WhatsApp to verify and reveal your username.'}
         </p>
       </div>
 
@@ -116,7 +151,7 @@ const ForgotUsername = () => {
           }}
         >
           <div style={{ color: '#10b981', fontSize: '13px', fontWeight: 600 }}>
-            Account Located Successfully!
+            🎉 Account Located & Verified Successfully!
           </div>
 
           <div
@@ -130,7 +165,7 @@ const ForgotUsername = () => {
               justifyContent: 'space-between',
             }}
           >
-            <span style={{ fontSize: '15px', fontWeight: 700, color: '#f8fafc', letterSpacing: '0.02em' }}>
+            <span style={{ fontSize: '16px', fontWeight: 700, color: '#f8fafc', letterSpacing: '0.02em' }}>
               {recoveredUser}
             </span>
             <button
@@ -178,20 +213,20 @@ const ForgotUsername = () => {
             Proceed to Login with Username
           </button>
         </div>
-      ) : (
-        /* Form */
-        <form onSubmit={handleRecover} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      ) : step === 1 ? (
+        /* STEP 1: Enter Registered Phone / WhatsApp Number */
+        <form onSubmit={handleRequestOtp} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '11px', fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Registered Email
+              REGISTERED PHONE / WHATSAPP NUMBER <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <div style={{ position: 'relative' }}>
               <input
-                type="email"
+                type="text"
                 className="glass-input"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="user@sentinel.local"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="Enter phone number (e.g. +919876543210 or 9876543210)..."
                 style={{
                   paddingLeft: '38px',
                   height: '40px',
@@ -206,9 +241,9 @@ const ForgotUsername = () => {
                 disabled={loading}
                 required
               />
-              <Mail
+              <Phone
                 size={15}
-                color="#64748b"
+                color="#10b981"
                 style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}
               />
             </div>
@@ -221,13 +256,101 @@ const ForgotUsername = () => {
               height: '42px',
               marginTop: '4px',
               borderRadius: '8px',
-              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
               border: 'none',
               color: '#fff',
               fontWeight: 700,
               fontSize: '13px',
               cursor: loading ? 'not-allowed' : 'pointer',
-              boxShadow: '0 0 20px rgba(56, 189, 248, 0.25)',
+              boxShadow: '0 0 20px rgba(16, 185, 129, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              transition: 'all 0.2s ease',
+            }}
+            disabled={loading}
+          >
+            <MessageSquare size={15} />
+            {loading ? 'Sending WhatsApp OTP...' : 'Send WhatsApp Security OTP 📲'}
+          </button>
+
+          <div style={{ textAlign: 'center', marginTop: '6px', fontSize: '12px', color: '#94a3b8' }}>
+            Remembered your credentials?{' '}
+            <Link to="/login" style={{ color: '#10b981', fontWeight: 700, textDecoration: 'none' }}>
+              Sign In
+            </Link>
+          </div>
+        </form>
+      ) : (
+        /* STEP 2: Verify WhatsApp OTP to Reveal Username */
+        <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div
+            style={{
+              background: 'rgba(16, 185, 129, 0.08)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+              borderRadius: '8px',
+              padding: '10px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              fontSize: '12px',
+              color: '#34d399',
+            }}
+          >
+            <CheckCircle2 size={16} />
+            <div>
+              WhatsApp OTP transmitted for <strong>{identifier}</strong>. {generatedPasscode && <span>Security OTP Code: <code style={{ color: '#10b981', fontWeight: 800 }}>[ {generatedPasscode} ]</code></span>}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '11px', fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              6-DIGIT WHATSAPP OTP CODE <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type="text"
+                className="glass-input"
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value)}
+                placeholder="Enter 6-digit OTP code..."
+                style={{
+                  paddingLeft: '38px',
+                  height: '40px',
+                  fontSize: '13px',
+                  borderRadius: '8px',
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  color: '#fff',
+                  width: '100%',
+                  boxSizing: 'border-box'
+                }}
+                disabled={loading}
+                required
+              />
+              <KeyRound
+                size={15}
+                color="#10b981"
+                style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            style={{
+              width: '100%',
+              height: '42px',
+              marginTop: '4px',
+              borderRadius: '8px',
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              border: 'none',
+              color: '#fff',
+              fontWeight: 700,
+              fontSize: '13px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              boxShadow: '0 0 20px rgba(16, 185, 129, 0.25)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -237,15 +360,23 @@ const ForgotUsername = () => {
             disabled={loading}
           >
             <Search size={16} />
-            {loading ? 'Locating Username...' : 'Find Username'}
+            {loading ? 'Verifying OTP...' : 'Verify OTP & Reveal Username 🔍'}
           </button>
 
-          <div style={{ textAlign: 'center', marginTop: '6px', fontSize: '12px', color: '#94a3b8' }}>
-            Remembered your credentials?{' '}
-            <Link to="/login" style={{ color: '#38bdf8', fontWeight: 700, textDecoration: 'none' }}>
-              Sign In
-            </Link>
-          </div>
+          <button
+            type="button"
+            onClick={() => setStep(1)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#94a3b8',
+              fontSize: '12px',
+              cursor: 'pointer',
+              marginTop: '4px',
+            }}
+          >
+            Change phone number or email
+          </button>
         </form>
       )}
     </div>

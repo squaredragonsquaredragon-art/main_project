@@ -72,7 +72,8 @@ class ChangePasswordSchema(BaseModel):
 
 
 class ForgotUsernameSchema(BaseModel):
-    email: EmailStr
+    email_or_phone: str
+    otp_code: str = ""
 
 
 class ForgotPasswordRequestSchema(BaseModel):
