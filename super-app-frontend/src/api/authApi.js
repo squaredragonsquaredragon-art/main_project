@@ -11,6 +11,11 @@ export const authApi = {
     return response.data;
   },
 
+  verifyCredentials: async (credentials, app = 'all') => {
+    const response = await api.post(`/auth/verify-credentials/?app=${app}`, credentials);
+    return response.data;
+  },
+
   logout: async (refreshToken) => {
     try {
       const response = await api.post('/auth/logout/', refreshToken ? { refresh: refreshToken } : {});
