@@ -103,3 +103,65 @@ async def send_whatsapp_alert(
                 "   Please copy your active Account SID and Auth Token from https://console.twilio.com into detect_be/.env!"
             )
         return False
+
+
+async def send_whatsapp_otp(to_phone: str, username: str, otp_code: str) -> bool:
+    """Send a WhatsApp Security OTP code to the target user's WhatsApp number."""
+    if not to_phone:
+        logger.warning(f"WhatsApp OTP skipped for @{username} — no phone number on record.")
+        return False
+
+    normalized = to_phone.strip().replace(" ", "").replace("-", "")
+    if normalized.startswith("whatsapp:"):
+        normalized = normalized[len("whatsapp:"):]
+    if len(normalized) == 10 and normalized.isdigit():
+        normalized = f"+91{normalized}"
+    elif len(normalized) == 12 and normalized.startswith("91"):
+        normalized = f"+{normalized}"
+    elif not normalized.startswith("+"):
+        normalized = f"+{normalized}"
+
+    to_number = f"whatsapp:{normalized}"
+
+    message_body = (
+        f"🔐 *SentinelAI Password Reset Security OTP*\n\n"
+        f"Hi *{username}*,\n"
+        f"Your 6-digit Password Reset Security OTP code is:\n\n"
+        f"👉 *{otp_code}*\n\n"
+        f"⏳ Valid for 10 minutes. Do NOT share this code with anyone. 🛡️"
+    )
+
+    if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN:
+        logger.info(f"📱 [WhatsApp OTP MOCK] Password Reset OTP for @{username} ({to_number}): {otp_code}")
+        return True
+
+    def _send_via_twilio(from_num: str):
+        from twilio.rest import Client
+        client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+        message = client.messages.create(
+            body=message_body,
+            from_=from_num,
+            to=to_number,
+        )
+        return message.sid
+
+    try:
+        loop = asyncio.get_event_loop()
+        from_sender = settings.TWILIO_WHATSAPP_FROM or "whatsapp:+14155238886"
+        if not from_sender.startswith("whatsapp:"):
+            from_sender = f"whatsapp:{from_sender}"
+
+        try:
+            sid = await loop.run_in_executor(None, _send_via_twilio, from_sender)
+            logger.info(f"✅ WhatsApp Security OTP sent to {to_number} for @{username} — SID: {sid}")
+            return True
+        except Exception as primary_err:
+            if from_sender != "whatsapp:+14155238886":
+                sid = await loop.run_in_executor(None, _send_via_twilio, "whatsapp:+14155238886")
+                logger.info(f"✅ WhatsApp Security OTP sent via Sandbox to {to_number} for @{username} — SID: {sid}")
+                return True
+            raise primary_err
+    except Exception as e:
+        logger.error(f"❌ WhatsApp Security OTP failed for @{username} ({to_number}): {e}")
+        return False
+

@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.auth_schema import (
     RegisterSchema, LoginSchema, RefreshSchema, ChangePasswordSchema,
-    ForgotUsernameSchema, ForgotPasswordSchema
+    ForgotUsernameSchema, ForgotPasswordSchema, ForgotPasswordRequestSchema
 )
 from app.services.auth_service import AuthService
 from app.dependencies import get_current_user
@@ -92,12 +92,22 @@ async def forgot_username(
     return await AuthService(db).forgot_username(data.email, app)
 
 
+@router.post("/forgot-password/request-otp/", summary="Request 6-digit Security OTP for password reset")
+@router.post("/forgot-password/request-otp", summary="Request 6-digit Security OTP alias")
+async def request_password_reset_otp(
+    data: ForgotPasswordRequestSchema,
+    app: str = Query("all"),
+    db: AsyncSession = Depends(get_db),
+):
+    return await AuthService(db).request_reset_otp(data.username_or_email, app)
+
+
 @router.post("/forgot-password/", summary="Reset forgotten password and notify back office")
 @router.post("/forgot-password", summary="Reset forgotten password alias")
 async def forgot_password(
     data: ForgotPasswordSchema,
     request: Request,
-    app: str = Query("all") if "Query" in globals() else "all",
+    app: str = Query("all"),
     db: AsyncSession = Depends(get_db),
 ):
     return await AuthService(db).forgot_password(data, request, app)

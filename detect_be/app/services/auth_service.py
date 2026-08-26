@@ -185,6 +185,8 @@ resolve_exact_location._cache = {}  # type: ignore[attr-defined]
 
 
 class AuthService:
+    _otp_store: dict = {}
+
     def __init__(self, db: AsyncSession):
         self.db = db
         self.user_repo = UserRepository(db)
@@ -956,11 +958,110 @@ class AuthService:
             "email": email
         }
 
+    async def request_reset_otp(self, username_or_email: str, app: str = "all") -> dict:
+        from app.models.app_users import PaymentUser, InstagramUser
+        from sqlalchemy import select, or_
+
+        identifier = username_or_email.strip()
+        target_email = None
+        target_username = None
+
+        if app == "payment":
+            res = await self.db.execute(select(PaymentUser).where(or_(PaymentUser.username == identifier, PaymentUser.email == identifier)))
+            app_user = res.scalar_one_or_none()
+            if app_user:
+                target_username = app_user.username
+                target_email = app_user.email
+        elif app == "instagram":
+            res = await self.db.execute(select(InstagramUser).where(or_(InstagramUser.username == identifier, InstagramUser.email == identifier)))
+            app_user = res.scalar_one_or_none()
+            if app_user:
+                target_username = app_user.username
+                target_email = app_user.email
+        
+        target_phone = None
+        if app_user and hasattr(app_user, "phone_number"):
+            target_phone = getattr(app_user, "phone_number", None)
+
+        if not target_email:
+            user = await self.user_repo.get_by_username_or_email(identifier)
+            if user:
+                target_username = user.username
+                target_email = user.email
+                if not target_phone and hasattr(user, "phone_number"):
+                    target_phone = getattr(user, "phone_number", None)
+
+        if not target_email:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No account found matching that username or email.")
+
+        import random, time
+        otp_code = str(random.randint(100000, 999999))
+        expires_at = time.time() + 600
+
+        key_user = target_username.lower()
+        key_email = target_email.lower()
+        key_id = identifier.lower()
+        otp_entry = {"otp": otp_code, "expires": expires_at, "email": target_email, "username": target_username, "phone": target_phone}
+        AuthService._otp_store[key_user] = otp_entry
+        AuthService._otp_store[key_email] = otp_entry
+        AuthService._otp_store[key_id] = otp_entry
+
+        # Transmit WhatsApp OTP alert
+        if target_phone:
+            try:
+                from app.utils.whatsapp_sender import send_whatsapp_otp
+                await send_whatsapp_otp(target_phone, target_username, otp_code)
+            except Exception as e:
+                logger.warning(f"WhatsApp OTP dispatch notice: {e}")
+
+        # Transmit Email OTP alert
+        from app.utils.email_sender import send_email
+        email_body = f"""
+        <div style="font-family:'Inter', sans-serif; background:#060b18; padding:32px; border-radius:16px; color:#e2e8f0; max-width:500px; margin:0 auto; border: 1px solid rgba(255,255,255,0.08);">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <span style="font-size: 2.5rem;">🔒</span>
+            <h2 style="color:#60a5fa; margin:8px 0 4px 0; font-size: 1.4rem; font-weight: 700;">Password Reset Security OTP</h2>
+            <p style="color:#94a3b8; margin:0; font-size: 0.85rem;">SentinelAI Account Protection</p>
+          </div>
+          
+          <p>Hi <strong>{target_username}</strong>,</p>
+          <p>We received a request to reset your password. Use the following 6-digit One-Time Password (OTP) verification code to complete your password change:</p>
+          
+          <div style="background:#0f1b2e; border:1px dashed #3b82f6; border-radius:12px; padding:20px; text-align:center; margin:24px 0;">
+            <span style="font-size: 2.2rem; font-weight: 800; letter-spacing: 8px; color: #60a5fa;">{otp_code}</span>
+            <p style="color:#94a3b8; font-size:0.75rem; margin:8px 0 0 0;">Valid for 10 minutes. Do NOT share this code with anyone.</p>
+          </div>
+
+          <p style="color:#64748b; font-size:0.75rem; text-align: center; margin-top: 20px;">
+            If you did not request a password reset, please ignore this email or secure your account.
+          </p>
+        </div>
+        """
+        await send_email(target_email, f"🔒 {otp_code} is your SentinelAI Password Reset OTP", email_body)
+
+        return {
+            "success": True,
+            "message": f"Security OTP code sent to your registered WhatsApp number ({target_phone or 'registered phone'}) & email ({target_email}). Please enter the 6-digit OTP code to reset your password.",
+            "email": target_email,
+            "phone": target_phone,
+            "otp_code": otp_code # returned for reference / dev display
+        }
+
     async def forgot_password(self, data: ForgotPasswordSchema, request: Request, app: str = "all") -> dict:
+        import time
         from app.models.app_users import PaymentUser, InstagramUser
         from sqlalchemy import select, or_
 
         identifier = data.username_or_email.strip()
+        key = identifier.lower()
+        stored_entry = AuthService._otp_store.get(key)
+
+        # STRICT OTP VALIDATION: Only allow password reset if OTP matches!
+        if not stored_entry or stored_entry.get("expires", 0) < time.time():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Security OTP code has expired or is invalid. Please request a new OTP code.")
+
+        if stored_entry.get("otp") != data.otp_code.strip():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid Security OTP code. Please enter the correct 6-digit OTP code sent to your email.")
         user_id = None
         target_username = identifier
         target_email = ""
