@@ -106,13 +106,40 @@ class LoginService:
         }
 
     async def get_all_stats(self) -> dict:
-        """System-wide stats for detect_fe monitoring dashboard."""
+        """System-wide stats for detect_fe monitoring dashboard (END-USERS ONLY, NEVER ADMIN)."""
         total = await self.login_repo.count_all()
         suspicious = await self.login_repo.count_all_suspicious()
+        blocked = await self.login_repo.count_all_blocked()
+        last = await self.login_repo.get_last_login_end_users()
+
+        # Risk score calculation based purely on end-user threat activity
+        risk_score = 10
+        if suspicious > 0:
+            risk_score = min(100, max(20, suspicious * 12))
+
+        risk_level = "LOW RISK"
+        if risk_score >= 70:
+            risk_level = "CRITICAL RISK"
+        elif risk_score >= 50:
+            risk_level = "HIGH RISK"
+        elif risk_score >= 25:
+            risk_level = "MEDIUM RISK"
+
+        normal_count = max(0, total - suspicious)
+
         return {
             "total_logins": total,
             "suspicious_attempts": suspicious,
-            "last_login": None,
+            "active_threats": suspicious,
+            "blocked_logins": blocked,
+            "last_login": last.login_time if last else None,
+            "risk_score": risk_score,
+            "risk_level": risk_level,
+            "distribution": {
+                "normal": normal_count,
+                "suspicious": suspicious,
+                "blocked": blocked,
+            }
         }
 
     async def get_trend(self, user_id: str, days: int = 30) -> list:
@@ -122,7 +149,20 @@ class LoginService:
         daily: dict = defaultdict(lambda: {"normal": 0, "suspicious": 0})
         for log in logs:
             day = log.login_time.date().isoformat()
-            if log.is_suspicious:
+            if log.is_suspicious or log.status in ("failed", "suspicious", "blocked"):
+                daily[day]["suspicious"] += 1
+            else:
+                daily[day]["normal"] += 1
+        return [{"date": d, **v} for d, v in sorted(daily.items())]
+
+    async def get_all_end_users_trend(self, days: int = 30) -> list:
+        """System-wide trend for all END-USERS (never admin)."""
+        logs = await self.login_repo.get_login_trend_end_users(days)
+        from collections import defaultdict
+        daily: dict = defaultdict(lambda: {"normal": 0, "suspicious": 0})
+        for log in logs:
+            day = log.login_time.date().isoformat()
+            if log.is_suspicious or log.status in ("failed", "suspicious", "blocked"):
                 daily[day]["suspicious"] += 1
             else:
                 daily[day]["normal"] += 1

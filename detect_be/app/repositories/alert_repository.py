@@ -45,11 +45,15 @@ class AlertRepository:
     async def get_all_alerts_paginated(
         self, skip: int = 0, limit: int = 20, for_super_admin: bool = True, user_id: str = None
     ) -> tuple[int, int, list[SuspiciousLog]]:
-        conditions = []
+        from app.models.user_model import User
+        admin_ids_subq = select(User.id).where(
+            (User.role == "admin") | (User.is_staff == True) | (User.username.in_(["qwer1234", "admin", "admin@sentinel.local"]))
+        )
+        conditions = [SuspiciousLog.user_id.notin_(admin_ids_subq)]
         if not for_super_admin and user_id:
             conditions.append(SuspiciousLog.user_id == user_id)
-            
-        where_clause = and_(*conditions) if conditions else True
+
+        where_clause = and_(*conditions)
 
         count_q = await self.db.execute(
             select(func.count(SuspiciousLog.id)).where(where_clause)
@@ -71,11 +75,15 @@ class AlertRepository:
         return total, unread, list(result.scalars().all())
 
     async def get_all_unread_count(self, for_super_admin: bool = True, user_id: str = None) -> int:
-        conditions = []
+        from app.models.user_model import User
+        admin_ids_subq = select(User.id).where(
+            (User.role == "admin") | (User.is_staff == True) | (User.username.in_(["qwer1234", "admin", "admin@sentinel.local"]))
+        )
+        conditions = [SuspiciousLog.user_id.notin_(admin_ids_subq)]
         if not for_super_admin and user_id:
             conditions.append(SuspiciousLog.user_id == user_id)
-            
-        where_clause = and_(*conditions) if conditions else True
+
+        where_clause = and_(*conditions)
 
         result = await self.db.execute(
             select(func.count(SuspiciousLog.id)).where(

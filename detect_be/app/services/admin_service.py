@@ -44,6 +44,85 @@ class AdminService:
             ))
         return result
 
+    async def get_user_history_export(
+        self,
+        user_id: str,
+        start_date: str = None,
+        end_date: str = None,
+    ) -> dict:
+        """Fetch ALL login history for a specific user with optional date range, for export."""
+        from app.models.login_log_model import LoginLog
+        from sqlalchemy import select, desc, and_
+        from datetime import datetime, timezone
+
+        user = await self.user_repo.get_by_id(user_id)
+        if not user:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"User '{user_id}' not found")
+
+        conditions = [LoginLog.user_id == user_id]
+
+        if start_date:
+            try:
+                dt_start = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+                conditions.append(LoginLog.login_time >= dt_start)
+            except ValueError:
+                pass
+
+        if end_date:
+            try:
+                dt_end = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
+                conditions.append(LoginLog.login_time <= dt_end)
+            except ValueError:
+                pass
+
+        where_clause = and_(*conditions)
+        result = await self.db.execute(
+            select(LoginLog)
+            .where(where_clause)
+            .order_by(desc(LoginLog.login_time))
+            .limit(5000)  # Safety cap
+        )
+        logs = list(result.scalars().all())
+
+        def _fmt(dt):
+            if not dt:
+                return ""
+            if hasattr(dt, "isoformat"):
+                return dt.isoformat()
+            return str(dt)
+
+        return {
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "is_active": user.is_active,
+                "risk_level": "low",
+            },
+            "total": len(logs),
+            "start_date": start_date,
+            "end_date": end_date,
+            "logs": [
+                {
+                    "id": str(log.id),
+                    "event_type": log.event_type or "",
+                    "status": log.status or "",
+                    "source_app": log.source_app or "",
+                    "ip_address": log.ip_address or "",
+                    "browser": log.browser or "",
+                    "os": log.os or "",
+                    "device": log.device or "",
+                    "location": log.location or "",
+                    "is_suspicious": log.is_suspicious,
+                    "risk_score": float(log.risk_score or 0),
+                    "login_time": _fmt(log.login_time),
+                }
+                for log in logs
+            ],
+        }
+
+
+
     async def update_user(self, user_id: str, data: UserAdminUpdate) -> dict:
         user = await self.user_repo.get_by_id(user_id)
         if not user:

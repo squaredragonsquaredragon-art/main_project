@@ -333,17 +333,19 @@ class AuthService:
             app_user = result.scalar_one_or_none()
             if not app_user or not verify_password(data.password, app_user.hashed_password):
                 failed_count = await self._log_failed(data.username, request, app)
-                if failed_count >= 6:
-                    raise HTTPException(status.HTTP_403_FORBIDDEN, "Your account is blocked due to repeated failed attempts. Try again in 5 minutes.")
-                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid Username/Email or Password credentials.")
+                if failed_count >= 5:
+                    raise HTTPException(status.HTTP_403_FORBIDDEN, "Your account is blocked due to 5 wrong password attempts. Try again in 30 minutes.")
+                remaining_attempts = max(0, 5 - failed_count)
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"Invalid Username/Email or Password credentials. ({remaining_attempts} attempt{'s' if remaining_attempts != 1 else ''} remaining before 30-min security lockout)")
             user_obj = await self.user_repo.get_by_id(app_user.id)
         else:
             user_obj = await self.user_repo.get_by_username_or_email(data.username)
             if not user_obj or not verify_password(data.password, user_obj.hashed_password):
                 failed_count = await self._log_failed(data.username, request, "all")
-                if failed_count >= 6:
-                    raise HTTPException(status.HTTP_403_FORBIDDEN, "Your account is blocked due to repeated failed attempts. Try again in 5 minutes.")
-                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid Username/Email or Password credentials.")
+                if failed_count >= 5:
+                    raise HTTPException(status.HTTP_403_FORBIDDEN, "Your account is blocked due to 5 wrong password attempts. Try again in 30 minutes.")
+                remaining_attempts = max(0, 5 - failed_count)
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"Invalid Username/Email or Password credentials. ({remaining_attempts} attempt{'s' if remaining_attempts != 1 else ''} remaining before 30-min security lockout)")
 
         if user_obj and not user_obj.is_active:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Your account is pending Super Admin approval or blocked.")
@@ -388,11 +390,11 @@ class AuthService:
             if last_failed and "blocked" in (last_failed.status or "").lower():
                 time_diff = datetime.now(timezone.utc) - last_failed.login_time.replace(tzinfo=timezone.utc)
                 total_sec = time_diff.total_seconds()
-                if total_sec >= 300: # 5 minutes auto-unlock
+                if total_sec >= 1800: # 30 minutes auto-unlock
                     target_user.is_active = True
                     await self.db.commit()
                 else:
-                    remaining = 300 - total_sec
+                    remaining = 1800 - total_sec
                     m = int(remaining // 60)
                     s = int(remaining % 60)
                     # Log this attempt as suspicious even though account is blocked
@@ -423,7 +425,7 @@ class AuthService:
                         pass
                     raise HTTPException(
                         status.HTTP_403_FORBIDDEN,
-                        f"Your account is blocked due to security lockout. Try again in {m} minutes {s} seconds."
+                        f"Your account is blocked due to security lockout (5 wrong password attempts). Try again in {m} minutes {s} seconds."
                     )
             elif app != "all" and getattr(target_user, "role", "user") == "user":
                 # Regular users in super-app-frontend do not require super admin approval
@@ -452,12 +454,13 @@ class AuthService:
             app_user = result.scalar_one_or_none()
             if not app_user or not verify_password(data.password, app_user.hashed_password):
                 failed_count = await self._log_failed(data.username, request, app)
-                if failed_count >= 6:
+                if failed_count >= 5:
                     raise HTTPException(
                         status.HTTP_403_FORBIDDEN,
-                        "Your account is blocked. Try again in 5 minutes."
+                        "Your account is blocked due to 5 wrong password attempts. Try again in 30 minutes."
                     )
-                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials for this app")
+                remaining_attempts = max(0, 5 - failed_count)
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"Invalid credentials for this app. ({remaining_attempts} attempt{'s' if remaining_attempts != 1 else ''} remaining before 30-min security lockout)")
 
             # Fetch shared mirror User key
             user = await self.user_repo.get_by_id(app_user.id)
@@ -468,12 +471,13 @@ class AuthService:
             if not user or not verify_password(data.password, user.hashed_password):
                 # Log failed attempt
                 failed_count = await self._log_failed(data.username, request, "all")
-                if failed_count >= 6:
+                if failed_count >= 5:
                     raise HTTPException(
                         status.HTTP_403_FORBIDDEN,
-                        "Your account is blocked. Try again in 5 minutes."
+                        "Your account is blocked due to 5 wrong password attempts. Try again in 30 minutes."
                     )
-                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
+                remaining_attempts = max(0, 5 - failed_count)
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"Invalid credentials. ({remaining_attempts} attempt{'s' if remaining_attempts != 1 else ''} remaining before 30-min security lockout)")
 
         is_super_admin = user.username == "qwer1234" or getattr(user, "is_superuser", False)
         if not is_super_admin and not user.is_active:
@@ -680,11 +684,37 @@ class AuthService:
                 user_id = user.id
 
         if not user_id:
+            # Cross-check across PaymentUser and InstagramUser
+            res_p = await self.db.execute(
+                select(PaymentUser.id).where(or_(PaymentUser.username == identifier, PaymentUser.email == identifier))
+            )
+            user_id = res_p.scalar_one_or_none()
+            if not user_id:
+                res_i = await self.db.execute(
+                    select(InstagramUser.id).where(or_(InstagramUser.username == identifier, InstagramUser.email == identifier))
+                )
+                user_id = res_i.scalar_one_or_none()
+            if not user_id:
+                u = await self.user_repo.get_by_username_or_email(f"payment_{identifier}") or await self.user_repo.get_by_username_or_email(f"instagram_{identifier}")
+                if u:
+                    user_id = u.id
+
+        if not user_id:
             is_nonexistent = True
-            # Get default seeded admin user so failed attempt alerts are never dropped
-            admin_user = await self.user_repo.get_by_username_or_email("admin")
-            if admin_user:
-                user_id = admin_user.id
+            # Associate nonexistent target with end-user shadow account, never admin
+            unreg = await self.user_repo.get_by_username_or_email("unregistered_target")
+            if not unreg:
+                from app.utils.password_handler import hash_password
+                unreg = User(
+                    username="unregistered_target",
+                    email="unregistered@sentinel.local",
+                    hashed_password=hash_password("SentinelShadowTarget!999"),
+                    role="user",
+                    is_staff=False,
+                    is_active=True
+                )
+                await self.user_repo.create(unreg)
+            user_id = unreg.id
 
         if user_id:
             # 1. Resolve hacker's exact place/location using ip-api
@@ -707,8 +737,8 @@ class AuthService:
             )
             await self.login_repo.create(log)
 
-            # 2. Count failed logins in the last 15 minutes to trigger conditional alert and lockout rules
-            since = datetime.now(timezone.utc) - timedelta(minutes=15)
+            # 2. Count failed logins in the last 30 minutes to trigger conditional alert and lockout rules
+            since = datetime.now(timezone.utc) - timedelta(minutes=30)
             if is_nonexistent:
                 count_res = await self.db.execute(
                     select(func.count(LoginLog.id)).where(
@@ -727,19 +757,19 @@ class AuthService:
                 )
             failed_count = count_res.scalar_one()
 
-            # 3. Lockout Rule: If failed attempts are > 5 (i.e. >= 6), deactivate the account and store EXACT location in back office
-            if failed_count > 5 and not is_nonexistent:
+            # 3. Lockout Rule: If failed attempts are >= 5, deactivate the account for 30 minutes and capture exact location
+            if failed_count >= 5 and not is_nonexistent:
                 user = await self.user_repo.get_by_id(user_id)
                 if user and user.is_active:
                     user.is_active = False
                     await self.user_repo.update(user)
                 log.status = "blocked"
-                log.location = f"EXACT LOCATION CAPTURED: {location_str} (Account Blocked: >5 Failed Attempts)"
-            elif failed_count <= 5:
+                log.location = f"EXACT LOCATION CAPTURED: {location_str} (Account Blocked: >=5 Failed Attempts, 30-min Lockout)"
+            elif failed_count < 5:
                 log.location = f"Exact Location: {location_str} (Failed attempt {failed_count}/5)"
 
-            # 4. Alert Trigger Rule: Generate a suspicious alert when failed attempts hit threshold (>=3)
-            if failed_count >= 3:
+            # 4. Alert Trigger Rule: Generate a suspicious alert when failed attempts hit threshold (>=5)
+            if failed_count >= 5:
                 # Check if an unread alert already exists for this user account (One Alert Per Account)
                 existing_alert = await self.db.execute(
                     select(SuspiciousLog.id)
@@ -749,10 +779,10 @@ class AuthService:
                 )
                 
                 if existing_alert.scalar_one_or_none() is None:
-                    if failed_count > 5:
-                        desc_text = f"CRITICAL ALERT: User '{identifier}' exceeded 5 failed login attempts ({failed_count} attempts). Account deactivated. Originating from {location_str}."
-                    elif is_nonexistent:
+                    if is_nonexistent:
                         desc_text = f"Blocked unauthorized access attempt targeting nonexistent user '{identifier}' on the {app.capitalize() if app != 'all' else 'System'} app. Originating from {location_str}."
+                    elif failed_count >= 5:
+                        desc_text = f"CRITICAL ALERT: User '{identifier}' entered 5 incorrect passwords ({failed_count} attempts). Account auto-locked for 30 minutes. Originating from {location_str}."
                     else:
                         desc_text = f"Blocked unauthorized access attempt targeting user '{identifier}' on the {app.capitalize() if app != 'all' else 'System'} app using incorrect credentials. Originating from {location_str}."
 
@@ -783,7 +813,7 @@ class AuthService:
             if not is_nonexistent and user_id:
                 target_user_obj = await self.user_repo.get_by_id(user_id)
                 if target_user_obj:
-                    is_locked = failed_count >= 6
+                    is_locked = failed_count >= 5
                     from app.models.app_users import PaymentUser, InstagramUser
                     from sqlalchemy import select as sa_select
 

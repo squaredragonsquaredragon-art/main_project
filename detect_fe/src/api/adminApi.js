@@ -10,4 +10,12 @@ export const adminApi = {
   bulkForceLogoutUsers: (userIds) => api.post('/admin/bulk-force-logout/', { user_ids: userIds }),
   bulkDeleteUsers: (userIds) => api.post('/admin/bulk-delete-users/', { user_ids: userIds }),
   resetAllData: () => api.post('/admin/reset-all-data/'),
+  getUserHistoryExport: (userId, startDate, endDate) => {
+    const params = new URLSearchParams();
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    const qs = params.toString();
+    return api.get(`/admin/users/${userId}/history/export/${qs ? `?${qs}` : ''}`);
+  },
 };
+

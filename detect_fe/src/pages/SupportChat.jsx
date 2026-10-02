@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   MdSend, MdSearch, MdRefresh, MdEdit, MdDelete, MdInfo,
   MdClose, MdShield, MdLaptop, MdHistory, MdWarning, MdCheckCircle,
-  MdMoreVert, MdPhone, MdEmail, MdPerson, MdCheck, MdDoneAll
+  MdMoreVert, MdPhone, MdEmail, MdPerson, MdCheck, MdDoneAll, MdLock
 } from 'react-icons/md';
 import { getToken } from '../utils/tokenHelper';
 
@@ -32,6 +32,10 @@ const SupportChat = () => {
   // Editing state
   const [editingMsgId, setEditingMsgId] = useState(null);
   const [editingText, setEditingText] = useState('');
+
+  // Cryptographic raw ciphertext inspector toggle state
+  const [viewCipherMap, setViewCipherMap] = useState({});
+  const toggleCipher = (id) => setViewCipherMap((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const messagesEndRef = useRef(null);
 
@@ -509,6 +513,31 @@ const SupportChat = () => {
                 background: 'radial-gradient(circle, rgba(17,27,33,0.8) 0%, rgba(11,20,26,0.95) 100%)',
               }}
             >
+              {/* End-to-End Cryptography Security Notice */}
+              <div
+                style={{
+                  margin: '0 auto 12px',
+                  padding: '7px 16px',
+                  borderRadius: '10px',
+                  background: 'rgba(0, 168, 132, 0.12)',
+                  border: '1px solid rgba(0, 168, 132, 0.28)',
+                  color: '#00a884',
+                  fontSize: '0.74rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontWeight: 600,
+                  maxWidth: '85%',
+                  textAlign: 'center',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+                }}
+              >
+                <MdLock size={15} style={{ flexShrink: 0, color: '#25d366' }} />
+                <span>
+                  🔒 <strong>End-to-End Cryptography Active</strong>: Messages are encrypted with AES-256 before saving to the database. Click any message lock badge to view raw DB ciphertext vs decrypted text.
+                </span>
+              </div>
+
               {loadingMessages && messages.length === 0 ? (
                 <div style={{ textAlign: 'center', margin: 'auto', color: '#8696a0' }}>
                   Loading chat history...
@@ -526,11 +555,33 @@ const SupportChat = () => {
                       alignItems: isAdminMsg ? 'flex-end' : 'flex-start',
                     }}
                   >
-                    {/* Timestamp & Name */}
-                    <span style={{ fontSize: '0.68rem', color: '#8696a0', marginBottom: '2px', display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    {/* Timestamp, Encryption Status & Name */}
+                    <span style={{ fontSize: '0.68rem', color: '#8696a0', marginBottom: '2px', display: 'flex', gap: '5px', alignItems: 'center' }}>
                       {isAdminMsg ? 'Admin' : m.sender_name} •{' '}
                       {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       {m.is_edited && !m.is_deleted && <span style={{ fontStyle: 'italic', color: '#8696a0' }}>(edited)</span>}
+                      {m.is_encrypted && (
+                        <span
+                          onClick={() => m.encrypted_message && toggleCipher(m.id)}
+                          style={{
+                            cursor: m.encrypted_message ? 'pointer' : 'default',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            color: viewCipherMap[m.id] ? '#f59e0b' : '#00a884',
+                            fontSize: '0.63rem',
+                            background: viewCipherMap[m.id] ? 'rgba(245, 158, 11, 0.15)' : 'rgba(0, 168, 132, 0.15)',
+                            padding: '1px 5px',
+                            borderRadius: '4px',
+                            border: `1px solid ${viewCipherMap[m.id] ? 'rgba(245, 158, 11, 0.35)' : 'rgba(0, 168, 132, 0.3)'}`,
+                            fontWeight: 700,
+                          }}
+                          title={viewCipherMap[m.id] ? "Click to view decrypted message" : "Click to view raw encrypted ciphertext stored in DB"}
+                        >
+                          <MdLock size={10} />
+                          {viewCipherMap[m.id] ? 'Ciphertext (Raw DB)' : 'Encrypted'}
+                        </span>
+                      )}
                       {isAdminMsg && !m.is_deleted && (
                         m.is_read ? (
                           <MdDoneAll size={14} color="#53bdeb" title="Read by user" />
@@ -590,7 +641,16 @@ const SupportChat = () => {
                           boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
                         }}
                       >
-                        {m.message}
+                        {viewCipherMap[m.id] ? (
+                          <div style={{ fontFamily: 'monospace', fontSize: '0.74rem', wordBreak: 'break-all', color: '#fef08a' }}>
+                            <div style={{ fontSize: '0.62rem', textTransform: 'uppercase', color: '#f59e0b', marginBottom: '3px', fontWeight: 800 }}>
+                              🔐 Encrypted Ciphertext in Database:
+                            </div>
+                            {m.encrypted_message || m.message}
+                          </div>
+                        ) : (
+                          <span>{m.message}</span>
+                        )}
 
                         {/* Edit & Delete Action Buttons */}
                         {!m.is_deleted && (

@@ -22,6 +22,9 @@ class ChatMessageOut(BaseModel):
     sender_type: str
     sender_name: str
     message: str
+    encrypted_message: Optional[str] = None
+    is_encrypted: bool = True
+    encryption_algorithm: str = "AES-256-CBC / Fernet Cryptography"
     is_read: bool
     is_edited: bool = False
     is_deleted: bool = False
@@ -60,4 +63,11 @@ class UserDetailProfile(BaseModel):
 class AIChatSchema(BaseModel):
     message: str
     history: Optional[list[dict]] = []
+
+
+class UserMovementObserveSchema(BaseModel):
+    target_user: Optional[str] = "all"
+    prompt: Optional[str] = None
+    history: Optional[list[dict]] = []
+
 

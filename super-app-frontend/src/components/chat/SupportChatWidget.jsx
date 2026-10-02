@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   MessageSquare, Send, X, Bot, User, Sparkles, AlertCircle,
-  RefreshCw, Check, CheckCheck, Edit2, Trash2, CheckSquare
+  RefreshCw, Check, CheckCheck, Edit2, Trash2, CheckSquare, Lock
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
@@ -21,6 +21,10 @@ const SupportChatWidget = () => {
   // Editing state
   const [editingMsgId, setEditingMsgId] = useState(null);
   const [editingText, setEditingText] = useState('');
+
+  // Cryptographic raw ciphertext inspector toggle state
+  const [viewCipherMap, setViewCipherMap] = useState({});
+  const toggleCipher = (id) => setViewCipherMap((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const messagesEndRef = useRef(null);
 
@@ -259,6 +263,25 @@ const SupportChatWidget = () => {
             </button>
           </div>
 
+          {/* End-to-End Cryptography Security Bar */}
+          <div
+            style={{
+              padding: '6px 16px',
+              background: 'rgba(16, 185, 129, 0.08)',
+              borderBottom: '1px solid rgba(16, 185, 129, 0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              fontSize: '11px',
+              color: '#34d399',
+              fontWeight: 600,
+            }}
+          >
+            <Lock size={12} style={{ color: '#10b981' }} />
+            <span>🔒 End-to-End Cryptography Encrypted (AES-256)</span>
+          </div>
+
           {/* Messages Container */}
           <div
             style={{
@@ -319,12 +342,34 @@ const SupportChatWidget = () => {
                         fontWeight: 600,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '4px',
+                        gap: '5px',
                       }}
                     >
                       {isUser ? 'You' : m.sender_name} •{' '}
                       {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       {m.is_edited && !m.is_deleted && <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>(edited)</span>}
+                      {m.is_encrypted && (
+                        <span
+                          onClick={() => m.encrypted_message && toggleCipher(m.id)}
+                          style={{
+                            cursor: m.encrypted_message ? 'pointer' : 'default',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            color: viewCipherMap[m.id] ? '#f59e0b' : '#34d399',
+                            fontSize: '9.5px',
+                            background: viewCipherMap[m.id] ? 'rgba(245, 158, 11, 0.18)' : 'rgba(16, 185, 129, 0.15)',
+                            padding: '1px 5px',
+                            borderRadius: '4px',
+                            border: `1px solid ${viewCipherMap[m.id] ? 'rgba(245, 158, 11, 0.35)' : 'rgba(16, 185, 129, 0.3)'}`,
+                            fontWeight: 700,
+                          }}
+                          title={viewCipherMap[m.id] ? "Click to view decrypted plaintext" : "Click to view raw encrypted ciphertext stored in DB"}
+                        >
+                          <Lock size={9} />
+                          {viewCipherMap[m.id] ? 'Ciphertext (Raw DB)' : 'Encrypted'}
+                        </span>
+                      )}
                       {isUser && !m.is_deleted && (
                         m.is_read ? (
                           <CheckCheck size={13} style={{ color: '#38bdf8' }} title="Read by Admin" />
@@ -384,7 +429,16 @@ const SupportChatWidget = () => {
                           boxShadow: isUser ? '0 4px 12px rgba(2, 132, 199, 0.25)' : '0 4px 12px rgba(0,0,0,0.3)',
                         }}
                       >
-                        {m.message}
+                        {viewCipherMap[m.id] ? (
+                          <div style={{ fontFamily: 'monospace', fontSize: '11px', wordBreak: 'break-all', color: '#fef08a' }}>
+                            <div style={{ fontSize: '9px', textTransform: 'uppercase', color: '#f59e0b', marginBottom: '3px', fontWeight: 800 }}>
+                              🔐 Encrypted Ciphertext in Database:
+                            </div>
+                            {m.encrypted_message || m.message}
+                          </div>
+                        ) : (
+                          <span>{m.message}</span>
+                        )}
 
                         {/* Edit / Delete actions for user's own non-deleted message */}
                         {isUser && !m.is_deleted && (

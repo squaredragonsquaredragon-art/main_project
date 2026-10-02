@@ -16,7 +16,7 @@ const AdminLayout = () => {
 
   const menuItems = [
     { to: '/admin', label: 'Security Dashboard', icon: <ShieldAlert size={16} /> },
-    { to: '/admin/ai-chat', label: 'Chat with AI', icon: <Bot size={16} /> },
+    { to: '/admin/ai-chat', label: 'Threat Detect AI', icon: <Bot size={16} /> },
     { to: '/admin/users', label: 'User Directory', icon: <Users size={16} /> },
     { to: '/admin/threats', label: 'AI Threat Logs', icon: <Cpu size={16} /> },
     { to: '/admin/alerts', label: 'Incident Records', icon: <Activity size={16} /> }

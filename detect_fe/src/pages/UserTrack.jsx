@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   MdPeople, MdSearch, MdRefresh, MdShield, MdPowerSettingsNew,
-  MdCheckCircle, MdBlock, MdDelete, MdFilterList, MdCheck
+  MdCheckCircle, MdBlock, MdDelete, MdFilterList, MdCheck, MdFileDownload,
+  MdVolumeUp, MdVolumeOff
 } from 'react-icons/md';
 import { FiAlertTriangle } from 'react-icons/fi';
 import { adminService } from '../services/adminService';
-import ExportButton from '../components/common/ExportButton';
+import UserHistoryExportModal from '../components/common/UserHistoryExportModal';
+import { hackerAlarm } from '../utils/hackerAlarmSound';
 import toast from 'react-hot-toast';
 
 const riskColors = {
@@ -21,6 +23,10 @@ const UserTrack = () => {
   const [loading, setLoading] = useState(true);
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [actionLoading, setActionLoading] = useState(false);
+  const [historyModalUsers, setHistoryModalUsers] = useState(null); // null = closed
+  const [isMuted, setIsMuted] = useState(() => {
+    return localStorage.getItem('sentinel_hacker_alarm_muted') === 'true';
+  });
 
   const fetchUsers = useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true);
@@ -42,6 +48,70 @@ const UserTrack = () => {
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  // Periodic live threat check (every 8 seconds)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchUsers(true);
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [fetchUsers]);
+
+  // Identify cyber threat users: Risk Level HIGH / CRITICAL and Flagged count > 5
+  const threatUsers = users.filter((u) => {
+    const risk = (u.risk_level || '').toLowerCase();
+    const isHighRisk = risk === 'high' || risk === 'critical';
+    const flaggedCount = Number(u.suspicious_count || 0);
+    return isHighRisk && flaggedCount > 5;
+  });
+  const hasHackerThreat = threatUsers.length > 0;
+
+  // Sound Engine: Trigger hacker hacking siren if threat exists and audio is unmuted
+  useEffect(() => {
+    if (hasHackerThreat && !isMuted) {
+      hackerAlarm.start();
+    } else {
+      hackerAlarm.stop();
+    }
+    return () => {
+      hackerAlarm.stop();
+    };
+  }, [hasHackerThreat, isMuted]);
+
+  // Synchronize mute state across pages/Navbar
+  useEffect(() => {
+    const handleSync = () => {
+      setIsMuted(localStorage.getItem('sentinel_hacker_alarm_muted') === 'true');
+    };
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('sentinel_audio_mute_change', handleSync);
+    return () => {
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('sentinel_audio_mute_change', handleSync);
+    };
+  }, []);
+
+  // Toggle Mute / Unmute handler
+  const toggleMute = () => {
+    setIsMuted((prev) => {
+      const next = !prev;
+      localStorage.setItem('sentinel_hacker_alarm_muted', String(next));
+      window.dispatchEvent(new Event('sentinel_audio_mute_change'));
+      if (next) {
+        hackerAlarm.stop();
+        toast('🔇 Hacker alert sound MUTED', { icon: '🔇' });
+      } else {
+        toast.success('🔊 Hacker alert sound UNMUTED');
+        if (hasHackerThreat) {
+          hackerAlarm.start();
+        } else {
+          // Play quick audible feedback
+          hackerAlarm.playTestOnce();
+        }
+      }
+      return next;
+    });
+  };
 
   // Filter by search
   const filteredUsers = users.filter(
@@ -188,20 +258,61 @@ const UserTrack = () => {
           <p className="page-subtitle">Track end-users created from Super App, execute emergency 'Safe Account' logout, or permanently delete accounts from DB</p>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <ExportButton
-            data={filteredUsers}
-            filename="user_track_export"
-            columns={[
-              { key: 'id', label: 'User ID' },
-              { key: 'username', label: 'Username' },
-              { key: 'email', label: 'Email' },
-              { key: 'is_active', label: 'Active Status' },
-              { key: 'total_logins', label: 'Total Logins' },
-              { key: 'suspicious_count', label: 'Suspicious Logins' },
-              { key: 'risk_level', label: 'Risk Level' },
-              { key: 'created_at', label: 'Registration Date' }
-            ]}
-          />
+          <button
+            onClick={() => {
+              const targets = selectedUserIds.length > 0
+                ? filteredUsers.filter(u => selectedUserIds.includes(u.id))
+                : filteredUsers;
+              if (targets.length === 0) {
+                toast.error('No users to export');
+                return;
+              }
+              setHistoryModalUsers(targets);
+            }}
+            className="btn btn-sm btn-ghost"
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              border: '1px solid var(--clr-border)',
+              background: 'rgba(56,189,248,0.08)',
+              color: 'var(--clr-accent-cyan)',
+              fontWeight: 600,
+            }}
+          >
+            <MdFileDownload style={{ fontSize: '1.1rem' }} />
+            Export
+            {selectedUserIds.length > 0 && (
+              <span style={{ background: 'rgba(56,189,248,0.2)', color: 'var(--clr-accent-cyan)', borderRadius: '10px', padding: '0 6px', fontSize: '0.72rem', fontWeight: 700 }}>
+                {selectedUserIds.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={toggleMute}
+            className="btn btn-sm"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              border: `1px solid ${isMuted ? 'var(--clr-border)' : (hasHackerThreat ? 'rgba(239, 68, 68, 0.8)' : 'rgba(16, 185, 129, 0.5)')}`,
+              background: isMuted ? 'rgba(255, 255, 255, 0.05)' : (hasHackerThreat ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.12)'),
+              color: isMuted ? 'var(--clr-text-muted)' : (hasHackerThreat ? '#ef4444' : '#10b981'),
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+            }}
+            title={isMuted ? 'Unmute Hacker Alarm Notification' : 'Mute Hacker Alarm Notification'}
+          >
+            {isMuted ? <MdVolumeOff style={{ fontSize: '1.15rem' }} /> : <MdVolumeUp style={{ fontSize: '1.15rem' }} />}
+            <span>{isMuted ? 'Sound Muted' : (hasHackerThreat ? '🚨 Alarm Siren (Mute)' : 'Sound On')}</span>
+          </button>
+          <button
+            onClick={() => hackerAlarm.playTestOnce()}
+            className="btn btn-sm btn-ghost"
+            style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', border: '1px solid var(--clr-border)' }}
+            title="Preview / Test Hacker Siren Sound"
+          >
+            🔔 Test Sound
+          </button>
           <button
             onClick={() => { setLoading(true); fetchUsers(); }}
             className="btn btn-secondary btn-sm"
@@ -211,6 +322,55 @@ const UserTrack = () => {
           </button>
         </div>
       </div>
+
+      {/* Cyber Intrusion Hacker Attack Alert Banner */}
+      {hasHackerThreat && (
+        <div className="hacker-alert-banner">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <span style={{ fontSize: '2.2rem' }}>🚨</span>
+            <div>
+              <div style={{ fontWeight: 800, color: '#fca5a5', fontSize: '1.05rem', letterSpacing: '0.4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                CYBER INTRUSION DETECTED: HIGH RISK &amp; &gt;5 FLAGGED SUSPICIOUS LOGINS!
+                <span className="hacker-siren-dot" />
+              </div>
+              <div style={{ color: '#fecaca', fontSize: '0.86rem', marginTop: '3px' }}>
+                Hacker attack in progress targeting account(s): <strong>{threatUsers.map(u => u.username).join(', ')}</strong>.
+                {isMuted ? ' [Sound Alert Muted by Admin]' : ' [🚨 Hacker Intrusion Siren Playing 🔊]'}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button
+              onClick={toggleMute}
+              className="btn btn-sm"
+              style={{
+                background: isMuted ? 'rgba(239, 68, 68, 0.3)' : '#ef4444',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.25)',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                padding: '8px 16px',
+                boxShadow: isMuted ? 'none' : '0 0 15px rgba(239, 68, 68, 0.6)'
+              }}
+            >
+              {isMuted ? <MdVolumeUp style={{ fontSize: '1.2rem' }} /> : <MdVolumeOff style={{ fontSize: '1.2rem' }} />}
+              {isMuted ? 'Unmute Sound 🔔' : 'Mute Sound 🔇'}
+            </button>
+            <button
+              onClick={() => hackerAlarm.playTestOnce()}
+              className="btn btn-sm btn-ghost"
+              style={{ color: '#fca5a5', border: '1px solid rgba(239,68,68,0.4)', fontWeight: 600 }}
+              title="Test hacker siren audio"
+            >
+              Test Alarm
+            </button>
+          </div>
+        </div>
+      )}
+
 
       {/* Summary Cards */}
       <div className="grid-4" style={{ marginBottom: '24px' }}>
@@ -358,11 +518,15 @@ const UserTrack = () => {
               <tbody>
                 {filteredUsers.map((u) => {
                   const isSelected = selectedUserIds.includes(u.id);
+                  const isThreatUser = (u.risk_level?.toLowerCase() === 'high' || u.risk_level?.toLowerCase() === 'critical') && Number(u.suspicious_count || 0) > 5;
                   return (
                     <tr
                       key={u.id}
+                      className={isThreatUser ? 'hacker-threat-row' : ''}
                       style={{
-                        background: isSelected ? 'rgba(59, 130, 246, 0.08)' : undefined
+                        background: isThreatUser
+                          ? 'rgba(239, 68, 68, 0.14)'
+                          : (isSelected ? 'rgba(59, 130, 246, 0.08)' : undefined)
                       }}
                     >
                       <td style={{ textAlign: 'center' }}>
@@ -380,23 +544,27 @@ const UserTrack = () => {
                               width: '34px',
                               height: '34px',
                               borderRadius: '50%',
-                              background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                              background: isThreatUser
+                                ? 'linear-gradient(135deg, #ef4444, #dc2626)'
+                                : 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
                               color: 'white',
                               fontWeight: 700,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              fontSize: '0.85rem'
+                              fontSize: '0.85rem',
+                              boxShadow: isThreatUser ? '0 0 10px rgba(239, 68, 68, 0.6)' : 'none'
                             }}
                           >
                             {u.username?.[0]?.toUpperCase() || 'U'}
                           </div>
                           <div>
-                            <div style={{ fontWeight: 600, color: 'var(--clr-text-primary)' }}>
+                            <div style={{ fontWeight: 600, color: 'var(--clr-text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                               {u.username}
+                              {isThreatUser && <span className="hacker-siren-dot" title="Active hacker threat detected" />}
                             </div>
-                            <div style={{ fontSize: '0.72rem', color: 'var(--clr-text-muted)' }}>
-                              ID: {u.id?.slice(0, 8)}...
+                            <div style={{ fontSize: '0.72rem', color: isThreatUser ? '#fca5a5' : 'var(--clr-text-muted)' }}>
+                              ID: {u.id?.slice(0, 8)}... {isThreatUser && '(TARGETED)'}
                             </div>
                           </div>
                         </div>
@@ -407,15 +575,28 @@ const UserTrack = () => {
                       <td style={{ fontWeight: 600 }}>{u.total_logins}</td>
                       <td>
                         {u.suspicious_count > 0 ? (
-                          <span className="badge badge-suspicious">{u.suspicious_count} Flagged</span>
+                          <span
+                            className="badge badge-suspicious"
+                            style={isThreatUser ? { border: '1px solid #ef4444', background: 'rgba(239, 68, 68, 0.28)', fontWeight: 700 } : {}}
+                          >
+                            {u.suspicious_count} Flagged {isThreatUser && '🚨'}
+                          </span>
                         ) : (
                           <span style={{ color: 'var(--clr-text-muted)', fontSize: '0.85rem' }}>0</span>
                         )}
                       </td>
                       <td>
-                        <span className={`badge ${riskColors[u.risk_level] || 'badge-normal'}`}>
+                        <span
+                          className={`badge ${riskColors[u.risk_level] || 'badge-normal'}`}
+                          style={isThreatUser ? { animation: 'hackerPulse 1.2s infinite', border: '1px solid #ef4444' } : {}}
+                        >
                           {(u.risk_level || 'low').toUpperCase()}
                         </span>
+                        {isThreatUser && (
+                          <div style={{ fontSize: '0.68rem', color: '#f87171', fontWeight: 700, marginTop: '3px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <span className="hacker-siren-dot" /> HACK ATTACK
+                          </div>
+                        )}
                       </td>
                       <td>
                         {u.is_active ? (
@@ -484,6 +665,14 @@ const UserTrack = () => {
           </div>
         )}
       </div>
+
+      {/* History Export Modal */}
+      {historyModalUsers && (
+        <UserHistoryExportModal
+          users={historyModalUsers}
+          onClose={() => setHistoryModalUsers(null)}
+        />
+      )}
     </div>
   );
 };

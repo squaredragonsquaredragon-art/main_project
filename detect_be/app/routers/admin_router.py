@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_admin_user, get_super_admin_user
 from app.models.user_model import User
 from app.services.admin_service import AdminService
 from app.schemas.user_schema import UserAdminUpdate
+from typing import Optional
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+
 
 
 @router.get("/users/", summary="List all users (admin)")
@@ -16,6 +18,19 @@ async def list_users(
     db: AsyncSession = Depends(get_db),
 ):
     return await AdminService(db).get_all_users()
+
+
+@router.get("/users/{user_id}/history/export/", summary="Export a specific user's login history (admin)")
+@router.get("/users/{user_id}/history/export", summary="Export a specific user's login history (admin)")
+async def export_user_history(
+    user_id: str,
+    start_date: Optional[str] = Query(None, description="ISO datetime string for range start (e.g. 2026-07-01T00:00:00)"),
+    end_date: Optional[str] = Query(None, description="ISO datetime string for range end (e.g. 2026-10-01T23:59:59)"),
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns ALL login history records for a specific user within the given date range."""
+    return await AdminService(db).get_user_history_export(user_id, start_date, end_date)
 
 
 @router.post("/users/bulk-force-logout/", summary="Bulk force logout multiple users (admin)")

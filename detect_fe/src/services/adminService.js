@@ -45,4 +45,10 @@ export const adminService = {
     const { data } = await adminApi.resetAllData();
     return data;
   },
+
+  getUserHistoryExport: async (userId, startDate, endDate) => {
+    const { data } = await adminApi.getUserHistoryExport(userId, startDate, endDate);
+    return data;
+  },
 };
+

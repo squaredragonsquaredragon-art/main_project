@@ -68,13 +68,13 @@ async def send_brute_force_alert(
         lock_section = """
         <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px 16px;margin:20px 0;color:#fca5a5;font-size:0.9rem;display:flex;align-items:center;gap:10px;">
           <span>🔒</span>
-          <strong>Your account has been AUTO-LOCKED for safety.</strong> Please wait 5 minutes or contact support.
+          <strong>Your account has been AUTO-LOCKED for safety.</strong> Please wait 30 minutes or contact support.
         </div>
         """
     else:
         lock_section = f"""
         <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:12px 16px;margin:20px 0;color:#fcd34d;font-size:0.9rem;">
-          ⚠️ After {failed_count} wrong attempts, your account will be locked automatically.
+          ⚠️ After 5 wrong attempts, your account will be locked automatically for 30 minutes.
         </div>
         """
 

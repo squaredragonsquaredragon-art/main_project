@@ -37,14 +37,22 @@ const chartOptions = {
   }
 };
 
-const doughnutData = {
-  labels: ['Normal', 'Suspicious', 'Blocked'],
-  datasets: [{
-    data: [78, 17, 5],
-    backgroundColor: ['rgba(16,185,129,0.8)', 'rgba(239,68,68,0.8)', 'rgba(245,158,11,0.8)'],
-    borderColor: ['#10b981', '#ef4444', '#f59e0b'],
-    borderWidth: 2, hoverOffset: 8,
-  }]
+const buildDoughnutData = (stats) => {
+  const norm = stats?.distribution?.normal ?? Math.max(0, (stats?.total_logins || 0) - (stats?.suspicious_attempts || 0));
+  const susp = stats?.distribution?.suspicious ?? (stats?.suspicious_attempts || 0);
+  const blk = stats?.distribution?.blocked ?? (stats?.blocked_logins || 0);
+  const isZero = norm === 0 && susp === 0 && blk === 0;
+
+  return {
+    labels: ['Normal', 'Suspicious', 'Blocked'],
+    datasets: [{
+      data: isZero ? [1, 0, 0] : [norm, susp, blk],
+      backgroundColor: ['rgba(16,185,129,0.85)', 'rgba(239,68,68,0.85)', 'rgba(245,158,11,0.85)'],
+      borderColor: ['#10b981', '#ef4444', '#f59e0b'],
+      borderWidth: 2,
+      hoverOffset: 8,
+    }]
+  };
 };
 
 const StatCard = ({ icon, label, value, change, changeDir, color, subtext }) => (
@@ -134,7 +142,7 @@ const Dashboard = () => {
             </span>
           </h1>
           <p className="page-subtitle">
-            Welcome back, <strong style={{ color: 'var(--clr-text-primary)' }}>{user?.username || 'User'}</strong> — Here's your security overview
+            End-User Security Monitoring &amp; Live Threat Analytics (Admin Excluded)
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -186,10 +194,10 @@ const Dashboard = () => {
         </div>
       ) : (
         <div className="grid-cols-4" style={{ marginBottom: '24px' }}>
-          <StatCard icon={<MdLogin />} label="Total Logins" value={stats?.total_logins ?? 0} change="+12.5% vs last week" changeDir="up" color="blue" />
-          <StatCard icon={<FiAlertTriangle />} label="Suspicious Attempts" value={stats?.suspicious_attempts ?? 0} change="Needs attention" changeDir="down" color="red" />
+          <StatCard icon={<MdLogin />} label="Total User Logins" value={stats?.total_logins ?? 0} change="+12.5% vs last week" changeDir="up" color="blue" />
+          <StatCard icon={<FiAlertTriangle />} label="Suspicious User Attempts" value={stats?.suspicious_attempts ?? 0} change="Needs attention" changeDir="down" color="red" />
           <StatCard icon={<MdBlock />} label="Active Threats" value={stats?.suspicious_attempts ?? 0} subtext="Suspicious events flagged" color="amber" />
-          <StatCard icon={<MdDevices />} label="Last Login" value={stats?.last_login ? new Date(stats.last_login).toLocaleDateString() : 'N/A'} subtext="Most recent session" color="green" />
+          <StatCard icon={<MdDevices />} label="Last User Login" value={stats?.last_login ? new Date(stats.last_login).toLocaleDateString() : 'N/A'} subtext="Most recent session" color="green" />
         </div>
       )}
 
@@ -214,7 +222,7 @@ const Dashboard = () => {
             <p style={{ fontSize: '0.8rem', color: 'var(--clr-text-muted)' }}>Breakdown by login status</p>
           </div>
           <div style={{ height: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-            <Doughnut data={doughnutData} options={{
+            <Doughnut data={buildDoughnutData(stats)} options={{
               responsive: true, maintainAspectRatio: false, cutout: '70%',
               plugins: {
                 legend: { position: 'right', labels: { color: '#94a3b8', font: { family: 'Inter', size: 12 }, padding: 16, usePointStyle: true } },
@@ -235,16 +243,29 @@ const Dashboard = () => {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Time</th><th>IP Address</th><th>Device / Browser</th><th>Location</th><th>Status</th>
+                <th>User Account</th><th>Time</th><th>IP Address</th><th>Device / Browser</th><th>Location</th><th>Status</th>
               </tr>
             </thead>
             <tbody>
               {history.length === 0 ? (
-                <tr><td colSpan={5} style={{ textAlign: 'center', padding: '32px', color: 'var(--clr-text-muted)' }}>
-                  {loading ? 'Loading...' : 'No login records yet'}
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: 'var(--clr-text-muted)' }}>
+                  {loading ? 'Loading...' : 'No end-user login records yet'}
                 </td></tr>
               ) : history.map((row) => (
                 <tr key={row.id}>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{
+                        width: '28px', height: '28px', borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                        color: '#fff', fontSize: '0.75rem', fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                      }}>
+                        {row.username?.[0]?.toUpperCase() || 'U'}
+                      </div>
+                      <span style={{ fontWeight: 600, color: 'var(--clr-text-primary)' }}>{row.username}</span>
+                    </div>
+                  </td>
                   <td><div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><MdAccessTime style={{ color: 'var(--clr-text-muted)' }} />{new Date(row.login_time).toLocaleString()}</div></td>
                   <td><code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.85rem', color: 'var(--clr-accent-cyan)' }}>{row.ip_address}</code></td>
                   <td>{row.browser} / {row.os}</td>

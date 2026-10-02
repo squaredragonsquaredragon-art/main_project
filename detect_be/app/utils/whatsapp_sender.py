@@ -51,9 +51,9 @@ async def send_whatsapp_alert(
     to_number = f"whatsapp:{normalized}"
 
     lock_msg = (
-        "\n🔒 *Your account has been AUTO-LOCKED for safety.* Please wait 5 minutes or contact support."
+        "\n🔒 *Your account has been AUTO-LOCKED for safety.* Please wait 30 minutes or contact support."
         if is_locked else
-        f"\n⚠️ After {failed_count} wrong attempts, your account will be locked automatically."
+        f"\n⚠️ After 5 wrong attempts, your account will be locked automatically for 30 minutes."
     )
 
     message_body = (

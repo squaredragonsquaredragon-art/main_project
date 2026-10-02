@@ -35,6 +35,16 @@ class LoginRepository:
             conditions.append(LoginLog.event_type == event_type)
         return and_(*conditions) if conditions else True
 
+    def _end_user_filter(self):
+        from app.models.user_model import User
+        admin_ids_subq = select(User.id).where(
+            (User.role == "admin") | (User.is_staff == True) | (User.username.in_(["qwer1234", "admin", "admin@sentinel.local"]))
+        )
+        return and_(
+            LoginLog.user_id.notin_(admin_ids_subq),
+            LoginLog.username.notin_(["qwer1234", "admin", "admin@sentinel.local"])
+        )
+
     async def get_all(
         self,
         skip: int = 0,
@@ -43,15 +53,15 @@ class LoginRepository:
         event_type: Optional[str] = None,
         for_super_admin: bool = True,
     ) -> tuple[int, list[LoginLog]]:
-        """Return logs for ALL users — used by detect_fe monitoring view."""
-        conditions = []
+        """Return logs for END-USERS ONLY (never admin accounts) — used by detect_fe monitoring view."""
+        conditions = [self._end_user_filter()]
         if source_app and source_app != "all":
             conditions.append(LoginLog.source_app == source_app)
         if event_type and event_type != "all":
             conditions.append(LoginLog.event_type == event_type)
 
-        where_clause = and_(*conditions) if conditions else True
-        count_q = await self.db.execute(select(func.count()).where(where_clause))
+        where_clause = and_(*conditions)
+        count_q = await self.db.execute(select(func.count(LoginLog.id)).where(where_clause))
         total = count_q.scalar_one()
         result = await self.db.execute(
             select(LoginLog)
@@ -86,10 +96,14 @@ class LoginRepository:
     async def get_all_paginated(
         self, skip: int = 0, limit: int = 20
     ) -> tuple[int, list[LoginLog]]:
-        count_q = await self.db.execute(select(func.count(LoginLog.id)))
+        count_q = await self.db.execute(select(func.count(LoginLog.id)).where(self._end_user_filter()))
         total = count_q.scalar_one()
         result = await self.db.execute(
-            select(LoginLog).order_by(desc(LoginLog.login_time)).offset(skip).limit(limit)
+            select(LoginLog)
+            .where(self._end_user_filter())
+            .order_by(desc(LoginLog.login_time))
+            .offset(skip)
+            .limit(limit)
         )
         return total, list(result.scalars().all())
 
@@ -106,13 +120,28 @@ class LoginRepository:
         return result.scalar_one()
 
     async def count_all_suspicious(self) -> int:
+        """Count suspicious attempts by END-USERS ONLY."""
         result = await self.db.execute(
-            select(func.count()).where(LoginLog.is_suspicious == True)
+            select(func.count(LoginLog.id)).where(
+                self._end_user_filter(),
+                (LoginLog.is_suspicious == True) | (LoginLog.status.in_(["failed", "suspicious", "blocked"]))
+            )
+        )
+        return result.scalar_one()
+
+    async def count_all_blocked(self) -> int:
+        """Count blocked logins by END-USERS ONLY."""
+        result = await self.db.execute(
+            select(func.count(LoginLog.id)).where(
+                self._end_user_filter(),
+                LoginLog.status == "blocked"
+            )
         )
         return result.scalar_one()
 
     async def count_all(self) -> int:
-        result = await self.db.execute(select(func.count(LoginLog.id)))
+        """Count total logins by END-USERS ONLY."""
+        result = await self.db.execute(select(func.count(LoginLog.id)).where(self._end_user_filter()))
         return result.scalar_one()
 
     async def get_last_login(self, user_id: str | list[str]) -> Optional[LoginLog]:
@@ -122,11 +151,31 @@ class LoginRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_last_login_end_users(self) -> Optional[LoginLog]:
+        """Get the most recent login timestamp across all END-USERS."""
+        result = await self.db.execute(
+            select(LoginLog)
+            .where(self._end_user_filter())
+            .order_by(desc(LoginLog.login_time))
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def get_login_trend(self, user_id: str | list[str], days: int = 30) -> list[LoginLog]:
         cond = self._user_cond(user_id)
         since = datetime.now(timezone.utc) - timedelta(days=days)
         result = await self.db.execute(
             select(LoginLog).where(cond, LoginLog.login_time >= since).order_by(LoginLog.login_time)
+        )
+        return list(result.scalars().all())
+
+    async def get_login_trend_end_users(self, days: int = 30) -> list[LoginLog]:
+        """Get login trend for ALL END-USERS (never admin)."""
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        result = await self.db.execute(
+            select(LoginLog)
+            .where(self._end_user_filter(), LoginLog.login_time >= since)
+            .order_by(LoginLog.login_time)
         )
         return list(result.scalars().all())
 

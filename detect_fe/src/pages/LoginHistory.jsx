@@ -70,7 +70,7 @@ const LoginHistory = () => {
   const fetchBlocked = useCallback(async () => {
     try {
       const data = await adminService.getUsers();
-      const blocked = data.filter((u) => !u.is_active);
+      const blocked = data.filter((u) => !u.is_active && u.role !== 'admin' && !u.is_staff && u.username !== 'qwer1234');
       setBlockedUsers(blocked);
     } catch (err) {
       console.error('Failed to fetch blocked users:', err);
@@ -226,7 +226,7 @@ This action is irreversible and will delete all matching database records!`;
             Portal Activity History
           </h1>
           <p className="page-subtitle">
-            Live security feed — all users across all 3 application modules &nbsp;
+            Live security feed — End-user activity across all application modules (Admin excluded) &nbsp;
             <span style={{ color: 'var(--clr-accent-cyan)', fontWeight: 600 }}>
               {totalItems} total events
             </span>

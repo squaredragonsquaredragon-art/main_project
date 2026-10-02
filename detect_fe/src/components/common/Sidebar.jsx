@@ -49,7 +49,7 @@ const Sidebar = ({ collapsed, onToggle, mobileOpen }) => {
       links: [
         { to: '/dashboard', icon: <MdDashboard />, label: 'Dashboard' },
         { to: '/support-chat', icon: <MdChat />, label: 'Live Support Chat', badge: unreadChatCount > 0 ? String(unreadChatCount) : undefined },
-        { to: '/ai-chat', icon: <MdSmartToy />, label: 'Chat with AI' },
+        { to: '/ai-chat', icon: <MdSmartToy />, label: 'Threat Detect AI' },
         { to: '/login-history', icon: <MdHistory />, label: 'Login History' },
         { to: '/alerts', icon: <MdNotifications />, label: 'Alerts', badge: unreadCount > 0 ? String(unreadCount) : undefined },
       ]
