@@ -50,9 +50,9 @@ const Register = () => {
           from_name: userData.username,
           user_name: userData.username,
           user_email: userData.email,
-          phone: userData.phone,
+          phone: userData.phone_number,
           created_at: new Date().toLocaleString(),
-          message: `New Admin Account Created:\nName: ${userData.username}\nEmail: ${userData.email}\nPhone: ${userData.phone}`
+          message: `New Admin Account Created:\nName: ${userData.username}\nEmail: ${userData.email}\nPhone: ${userData.phone_number}`
         },
         'Mg727egd_A3-Kpz5S'
       );
@@ -64,7 +64,7 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
-    const userData = { username: form.username, email: form.email, phone: form.phone, password: form.password };
+    const userData = { username: form.username, email: form.email, phone_number: form.phone, password: form.password };
     const result = await register(userData);
     if (result?.success) {
       await sendBossEmailNotification(userData);
